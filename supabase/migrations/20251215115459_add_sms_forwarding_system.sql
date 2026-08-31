@@ -129,7 +129,7 @@ CREATE TRIGGER parse_sms_on_insert
 INSERT INTO settings (id, value, description) 
 VALUES (
   'sms_api_key',
-  encode(gen_random_bytes(32), 'hex'),
+  encode(extensions.gen_random_bytes(32), 'hex'),
   'API key for authenticating SMS forwarding from phone app'
 )
 ON CONFLICT (id) DO NOTHING;
