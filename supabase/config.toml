@@ -1,0 +1,21 @@
+# Supabase Edge Functions Configuration
+[functions.telegram-bot-webhook]
+verify_jwt = false
+
+[functions.select-card]
+verify_jwt = false
+
+[functions.deselect-card]
+verify_jwt = false
+
+[functions.claim-bingo]
+verify_jwt = false
+
+[functions.mark-cell]
+verify_jwt = false
+
+[functions.mark-cells-batch]
+verify_jwt = false
+
+[functions.get-card-layouts]
+verify_jwt = false

@@ -69,12 +69,14 @@ async function sendTelegramMessage(
 async function answerCallbackQuery(
   botToken: string,
   callbackQueryId: string,
-  text?: string
+  text?: string,
+  showAlert = false
 ) {
   const telegramUrl = `https://api.telegram.org/bot${botToken}/answerCallbackQuery`;
 
   const body: any = {
     callback_query_id: callbackQueryId,
+    show_alert: showAlert,
   };
 
   if (text) {
@@ -90,6 +92,159 @@ async function answerCallbackQuery(
   });
 
   return response.json();
+}
+
+async function getActiveGroupsWithCounts(supabaseClient: any) {
+  try {
+    const { data: rpcData, error: rpcError } = await supabaseClient.rpc("get_active_groups_with_counts");
+    if (!rpcError && rpcData && rpcData.length > 0) {
+      return rpcData;
+    }
+  } catch {
+    // Fallback to table query if RPC is not yet created
+  }
+
+  let groups: any[] | null = null;
+  try {
+    const { data: activeGroups, error: activeErr } = await supabaseClient
+      .from("groups")
+      .select("*")
+      .eq("is_active", true);
+
+    if (!activeErr && activeGroups && activeGroups.length > 0) {
+      groups = activeGroups;
+    } else {
+      const { data: allGroups } = await supabaseClient.from("groups").select("*");
+      groups = allGroups;
+    }
+  } catch {
+    // Ignore query error
+  }
+
+  const validSlugs = new Set(["starter_room", "addis_classic", "vip_diamond", "high_roller", "fekadu_kera", "hasen_stadium"]);
+  if (groups && groups.length > 0) {
+    groups = groups.filter(
+      (g: any) =>
+        validSlugs.has(g.slug) &&
+        (g.name.includes("🎯") ||
+         g.name.includes("🎲") ||
+         g.name.includes("💎") ||
+         g.name.includes("👑") ||
+         g.name.includes("🐮") ||
+         g.name.includes("⚽️"))
+    );
+  }
+
+  if (!groups || groups.length === 0) {
+    return [
+      {
+        id: "starter_room",
+        slug: "starter_room",
+        name: "🎯 Starter Room (10 ETB)",
+        stake_amount: 10,
+        min_balance: 10,
+        admin_name: "Parcelic Admin",
+        admin_username: "parcelic",
+        online_players_count: 0,
+      },
+      {
+        id: "addis_classic",
+        slug: "addis_classic",
+        name: "🎲 Addis Classic (20 ETB)",
+        stake_amount: 20,
+        min_balance: 20,
+        admin_name: "Parcelic Admin",
+        admin_username: "parcelic",
+        online_players_count: 0,
+      },
+      {
+        id: "vip_diamond",
+        slug: "vip_diamond",
+        name: "💎 VIP Diamond Club (50 ETB)",
+        stake_amount: 50,
+        min_balance: 50,
+        admin_name: "Parcelic Admin",
+        admin_username: "parcelic",
+        online_players_count: 0,
+      },
+      {
+        id: "high_roller",
+        slug: "high_roller",
+        name: "👑 High Roller Room (100 ETB)",
+        stake_amount: 100,
+        min_balance: 100,
+        admin_name: "Parcelic Admin",
+        admin_username: "parcelic",
+        online_players_count: 0,
+      },
+      {
+        id: "fekadu_kera",
+        slug: "fekadu_kera",
+        name: "🐮 ፍቃዱ ቄራ (10 ETB)",
+        stake_amount: 10,
+        min_balance: 10,
+        admin_name: "Parcelic Admin",
+        admin_username: "parcelic",
+        online_players_count: 0,
+      },
+      {
+        id: "hasen_stadium",
+        slug: "hasen_stadium",
+        name: "⚽️ ሀሰን ስታዲየም (10 ETB)",
+        stake_amount: 10,
+        min_balance: 10,
+        admin_name: "Parcelic Admin",
+        admin_username: "parcelic",
+        online_players_count: 0,
+      },
+    ];
+  }
+
+  const results = [];
+  for (const g of groups) {
+    try {
+      const { count } = await supabaseClient
+        .from("players")
+        .select("id", { count: "exact", head: true })
+        .eq("group_id", g.id)
+        .eq("is_connected", true);
+
+      results.push({
+        ...g,
+        online_players_count: count || 0,
+      });
+    } catch {
+      results.push({
+        ...g,
+        online_players_count: 0,
+      });
+    }
+  }
+
+  return results;
+}
+
+function buildGroupsKeyboard(groups: any[], appUrl: string) {
+  const keyboard: any[][] = groups.map((g: any) => [
+    {
+      text: `${g.name} • ${g.online_players_count ?? 0} online`,
+      callback_data: `pick_group:${g.slug || g.id}`,
+    },
+  ]);
+
+  keyboard.push([
+    {
+      text: "🎮 Open Game (Lobby)",
+      web_app: { url: appUrl },
+    },
+  ]);
+
+  keyboard.push([
+    { text: "💰 Check Balance", callback_data: "check_balance" },
+    { text: "💬 Contact Admin (@parcelic)", url: "https://t.me/parcelic" },
+  ]);
+
+  return { inline_keyboard: keyboard };
 }
 
 Deno.serve(async (req: Request) => {
@@ -184,6 +339,127 @@ Deno.serve(async (req: Request) => {
         await answerCallbackQuery(botToken, callbackQuery.id);
       }
 
+      if (chatId && data && (data === "show_groups" || data === "rooms")) {
+        handled = true;
+        const { data: gameUrlData } = await supabaseClient
+          .from("settings")
+          .select("value")
+          .eq("id", "game_url")
+          .maybeSingle();
+        const appUrl = gameUrlData?.value || "https://yeaddisbingo.web.app";
+        const groups = await getActiveGroupsWithCounts(supabaseClient);
+
+        await sendTelegramMessage(
+          botToken,
+          chatId,
+          `🎲 <b>Available Live Rooms:</b>\n\nPick a room below to see details, stake amount, and live players:`,
+          buildGroupsKeyboard(groups, appUrl)
+        );
+        await answerCallbackQuery(botToken, callbackQuery.id);
+      }
+
+      if (chatId && data && data.startsWith("pick_group:")) {
+        handled = true;
+        const groupSlug = data.replace("pick_group:", "");
+        const { data: group } = await supabaseClient
+          .from("groups")
+          .select("*")
+          .or(`slug.eq.${groupSlug},id.eq.${groupSlug}`)
+          .maybeSingle();
+
+        const { data: userData } = await supabaseClient
+          .from("telegram_users")
+          .select("balance")
+          .eq("telegram_user_id", user.id)
+          .maybeSingle();
+
+        const balance = userData?.balance || 0;
+        const minBalance = group?.min_balance || 20;
+
+        const { data: gameUrlData } = await supabaseClient
+          .from("settings")
+          .select("value")
+          .eq("id", "game_url")
+          .maybeSingle();
+        const appUrl = gameUrlData?.value || "https://yeaddisbingo.web.app";
+
+        if (group && balance < minBalance) {
+          const adminUsername = group.admin_username || "parcelic";
+          const adminLink = `https://t.me/${adminUsername.replace(/^@/, '')}`;
+
+          await answerCallbackQuery(
+            botToken,
+            callbackQuery.id,
+            `⚠️ Insufficient Balance for ${group.name}!\n\nRequired: ${minBalance} ETB\nYour Balance: ${balance} ETB`,
+            true
+          );
+
+          await sendTelegramMessage(
+            botToken,
+            chatId,
+            `⚠️ <b>Insufficient Balance for ${group.name}</b>\n\n` +
+            `• Required minimum: <b>${minBalance} ETB</b>\n` +
+            `• Your balance: <b>${balance} ETB</b>\n\n` +
+            `Please contact room admin <b>${group.admin_name}</b> (@${adminUsername.replace(/^@/, '')}) to top up:`,
+            {
+              inline_keyboard: [
+                [{ text: `💬 Contact Admin (@${adminUsername.replace(/^@/, '')})`, url: adminLink }],
+                [{ text: "🔄 View Other Rooms", callback_data: "show_groups" }],
+              ],
+            }
+          );
+        } else if (group) {
+          const roomUrl = `${appUrl}${appUrl.includes("?") ? "&" : "?"}group=${group.slug || group.id}`;
+          await sendTelegramMessage(
+            botToken,
+            chatId,
+            `✅ <b>Ready to play in ${group.name}!</b>\n\n` +
+            `• Card Stake: <b>${group.stake_amount} ETB</b>\n` +
+            `• Your Balance: <b>${balance} ETB</b>\n\n` +
+            `Tap the button below to launch the live game:`,
+            {
+              inline_keyboard: [
+                [
+                  {
+                    text: `🎮 Join ${group.name}`,
+                    web_app: { url: roomUrl },
+                  },
+                ],
+                [{ text: "🔄 Change Room", callback_data: "show_groups" }],
+              ],
+            }
+          );
+          await answerCallbackQuery(botToken, callbackQuery.id);
+        } else {
+          await answerCallbackQuery(botToken, callbackQuery.id);
+        }
+      }
+
+      if (chatId && data === "check_balance") {
+        handled = true;
+        const { data: userData } = await supabaseClient
+          .from("telegram_users")
+          .select("balance, deposited_balance, won_balance")
+          .eq("telegram_user_id", user.id)
+          .maybeSingle();
+
+        const bal = userData?.balance || 0;
+        await sendTelegramMessage(
+          botToken,
+          chatId,
+          `💰 <b>Your Current Balance:</b> ${bal} ETB\n\n` +
+          `• Deposited: ${userData?.deposited_balance || 0} ETB\n` +
+          `• Won: ${userData?.won_balance || 0} ETB\n\n` +
+          `Choose a room to start playing:`,
+          {
+            inline_keyboard: [
+              [{ text: "🎲 Select Room", callback_data: "show_groups" }],
+            ],
+          }
+        );
+        await answerCallbackQuery(botToken, callbackQuery.id);
+      }
+
       if (!handled) {
         console.log(`Unhandled callback query: ${data}`);
         await answerCallbackQuery(botToken, callbackQuery.id, "Action not recognized");
@@ -217,7 +493,7 @@ Deno.serve(async (req: Request) => {
 
     const message = update.message;
     const chatId = message.chat.id;
-    const text = message.text;
+    const text = message.text || "";
     const user = message.from;
 
     const { data: userState } = await supabaseClient
@@ -348,10 +624,14 @@ Deno.serve(async (req: Request) => {
             .eq("telegram_user_id", user.id)
             .single();
 
+          const newBal = updatedUser?.balance ?? 0;
+          const wonBal = updatedUser?.won_balance ?? 0;
+          const depBal = updatedUser?.deposited_balance ?? 0;
+
           await sendTelegramMessage(
             botToken,
             chatId,
-            `✅ <b>Transfer Successful!</b>\n\n💰 Amount: <b>${amount} ETB</b>\n📝 From: <b>${balanceType === 'won' ? 'Won' : 'Deposited'} Balance</b>\n👤 Recipient: @${stateData.recipient_username}\n\n💵 Your new balance: <b>${updatedUser.balance} ETB</b>\n🏆 Won balance: <b>${updatedUser.won_balance} ETB</b>\n💵 Deposited balance: <b>${updatedUser.deposited_balance} ETB</b>\n\nThe recipient has been notified.`
+            `✅ <b>Transfer Successful!</b>\n\n💰 Amount: <b>${amount} ETB</b>\n📝 From: <b>${balanceType === 'won' ? 'Won' : 'Deposited'} Balance</b>\n👤 Recipient: @${stateData.recipient_username}\n\n💵 Your new balance: <b>${newBal} ETB</b>\n🏆 Won balance: <b>${wonBal} ETB</b>\n💵 Deposited balance: <b>${depBal} ETB</b>\n\nThe recipient has been notified.`
           );
 
           await sendTelegramMessage(
@@ -453,7 +733,9 @@ Deno.serve(async (req: Request) => {
               .eq("telegram_user_id", user.id)
               .single();
 
-            userData = { ...userData, ...updatedUser };
+            if (updatedUser) {
+              userData = { ...userData, ...updatedUser };
+            }
           }
         }
       } else {
@@ -503,23 +785,94 @@ Deno.serve(async (req: Request) => {
           .eq("id", "game_url")
           .maybeSingle();
 
-        const appUrl = gameUrlData?.value || "https://multiplayer-bingo-we-5btk.bolt.host/";
+        const appUrl = gameUrlData?.value || "https://yeaddisbingo.web.app";
+        const groups = await getActiveGroupsWithCounts(supabaseClient);
 
         await sendTelegramMessage(
           botToken,
           chatId,
-          welcomeMessage,
-          {
-            inline_keyboard: [
-              [
-                {
-                  text: "🎮 Play Bingo",
-                  web_app: { url: appUrl },
-                },
-              ],
-            ],
-          }
+          welcomeMessage + `\n\n👇 <b>Select a room to play below:</b>`,
+          buildGroupsKeyboard(groups, appUrl)
         );
+      }
+    } else if (text.startsWith("/groups") || text.startsWith("/rooms")) {
+      const { data: gameUrlData } = await supabaseClient
+        .from("settings")
+        .select("value")
+        .eq("id", "game_url")
+        .maybeSingle();
+      const appUrl = gameUrlData?.value || "https://yeaddisbingo.web.app";
+      const groups = await getActiveGroupsWithCounts(supabaseClient);
+
+      await sendTelegramMessage(
+        botToken,
+        chatId,
+        `🎲 <b>Active Bingo Rooms</b>\n\nSelect a room with your preferred stake:`,
+        buildGroupsKeyboard(groups, appUrl)
+      );
+    } else if (text.startsWith("/topup")) {
+      const parts = text.split(" ");
+      if (parts.length < 3) {
+        await sendTelegramMessage(
+          botToken,
+          chatId,
+          "ℹ️ <b>Admin Top-Up Usage:</b>\n<code>/topup &lt;telegram_user_id&gt; &lt;amount&gt;</code>\n\nExample: <code>/topup 123456789 50</code>"
+        );
+      } else {
+        const targetUserId = parseInt(parts[1], 10);
+        const amount = parseFloat(parts[2]);
+
+        if (isNaN(targetUserId) || isNaN(amount) || amount <= 0) {
+          await sendTelegramMessage(botToken, chatId, "❌ Invalid user ID or amount.");
+        } else {
+          try {
+            const { data: result, error: rpcErr } = await supabaseClient.rpc("admin_topup_user", {
+              p_admin_id: user.id,
+              p_target_telegram_id: targetUserId,
+              p_amount: amount,
+            });
+
+            if (rpcErr || !result?.success) {
+              // Direct table fallback if RPC doesn't exist yet
+              const { data: existingTarget } = await supabaseClient
+                .from("telegram_users")
+                .select("balance, deposited_balance")
+                .eq("telegram_user_id", targetUserId)
+                .maybeSingle();
+
+              if (!existingTarget) {
+                await sendTelegramMessage(botToken, chatId, `❌ User ID ${targetUserId} not found in database.`);
+              } else {
+                const newBal = (existingTarget.balance || 0) + amount;
+                await supabaseClient
+                  .from("telegram_users")
+                  .update({
+                    balance: newBal,
+                    deposited_balance: (existingTarget.deposited_balance || 0) + amount,
+                  })
+                  .eq("telegram_user_id", targetUserId);
+
+                await sendTelegramMessage(
+                  botToken,
+                  chatId,
+                  `✅ Credited <b>${amount} ETB</b> to user <code>${targetUserId}</code>.\nNew Balance: <b>${newBal} ETB</b>`
+                );
+              }
+            } else {
+              await sendTelegramMessage(
+                botToken,
+                chatId,
+                `✅ Credited <b>${amount} ETB</b> to user <code>${targetUserId}</code>.\nNew Balance: <b>${result.new_balance} ETB</b>`
+              );
+            }
+          } catch (topErr) {
+            await sendTelegramMessage(
+              botToken,
+              chatId,
+              `❌ Error topping up: ${topErr instanceof Error ? topErr.message : String(topErr)}`
+            );
+          }
+        }
       }
     } else if (text.startsWith("/play")) {
       await supabaseClient
@@ -551,7 +904,7 @@ Deno.serve(async (req: Request) => {
           .eq("id", "game_url")
           .maybeSingle();
 
-        const appUrl = gameUrlData?.value || "https://multiplayer-bingo-we-5btk.bolt.host/";
+        const appUrl = gameUrlData?.value || "https://yeaddisbingo.web.app";
 
         await sendTelegramMessage(
           botToken,
@@ -646,13 +999,19 @@ Deno.serve(async (req: Request) => {
           .eq("id", "telegram_bot_username")
           .maybeSingle();
 
-        const botUsername = botUsernameData?.value || Deno.env.get("TELEGRAM_BOT_USERNAME") || "your_bot";
+        const botUsername = botUsernameData?.value || Deno.env.get("TELEGRAM_BOT_USERNAME") || "yeAddisGamesbot";
         const inviteLink = `https://t.me/${botUsername}?start=${existingUser.referral_code}`;
 
         await sendTelegramMessage(
           botToken,
           chatId,
-          `🎁 <b>Invite Friends & Earn!</b>\n\n💰 Get <b>5 ETB</b> for every friend who joins using your link!\n🎁 Your friend also gets <b>10 ETB</b> welcome bonus!\n\n🔗 <b>Your Referral Link:</b>\n<code>${inviteLink}</code>\n\n📊 Total referrals: <b>${existingUser.total_referrals || 0}</b>\n💵 Total earned: <b>${(existingUser.total_referrals || 0) * 5} ETB</b>\n\n📤 Share this link with your friends and start earning!`
+          `🎁 <b>Invite Friends & Earn! / ጓደኞችዎን ይጋብዙና ተሸላሚ ይሁኑ!</b>\n\n` +
+          `💰 Get <b>10 ETB</b> deposited to your balance for every friend who joins!\n` +
+          `🎁 Your friend also gets <b>10 ETB</b> welcome bonus!\n\n` +
+          `🔗 <b>Your Unique Referral Link:</b>\n<code>${inviteLink}</code>\n\n` +
+          `📊 Total referrals: <b>${existingUser.total_referrals || 0} / 20</b>\n` +
+          `💵 Total earned: <b>${(existingUser.total_referrals || 0) * 10} ETB</b>\n\n` +
+          `📤 Share this link with your friends and start playing together!`
         );
       }
     } else if (text.startsWith("/instructions")) {
@@ -763,10 +1122,11 @@ Deno.serve(async (req: Request) => {
               .eq("telegram_user_id", user.id)
               .single();
 
+            const userBal = updatedUser?.balance ?? 0;
             await sendTelegramMessage(
               botToken,
               chatId,
-              `✅ Deposit Verified!\n\n💰 Amount: <b>${submission.amount} ETB</b>\n💳 Your new balance: <b>${updatedUser.balance} ETB</b>\n\nThank you for your deposit! You can start playing now.`
+              `✅ Deposit Verified!\n\n💰 Amount: <b>${submission.amount} ETB</b>\n💳 Your new balance: <b>${userBal} ETB</b>\n\nThank you for your deposit! You can start playing now.`
             );
           } else {
             await sendTelegramMessage(
@@ -795,7 +1155,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("Error processing webhook:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       {
         status: 500,
         headers: {

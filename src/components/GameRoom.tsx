@@ -2,9 +2,10 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase, Game, Player } from '../lib/supabase';
 import { BingoCard } from './BingoCard';
 import { getBingoLetter } from '../utils/bingoUtils';
-import { Trophy, Eye } from 'lucide-react';
+import { Trophy, Eye, Volume2, VolumeX } from 'lucide-react';
 import { useConnectionManager } from '../hooks/useConnectionManager';
 import { formatBnb } from '../utils/formatBalance';
+import { soundAnnouncer, getAmharicLetter, numberToAmharicWord } from '../utils/soundAnnouncer';
 
 interface GameRoomProps {
   gameId: string;
@@ -34,6 +35,8 @@ export function GameRoom({ gameId, playerId, onReturnToLobby }: GameRoomProps) {
     Array(5).fill(null).map(() => Array(5).fill(false))
   );
   const hasInitializedMarks = useRef(false);
+  const [isAudioMuted, setIsAudioMuted] = useState(() => soundAnnouncer.getMuted());
+  const prevCalledNumberRef = useRef<number | null>(null);
 
   const { isReconnecting } = useConnectionManager(
     `game-health:${gameId}`,
@@ -64,6 +67,21 @@ export function GameRoom({ gameId, playerId, onReturnToLobby }: GameRoomProps) {
     onReturnToLobbyRef.current = onReturnToLobby;
   }, [onReturnToLobby]);
 
+  // Trigger Amharic announcement when a new number is called
+  useEffect(() => {
+    if (game?.current_number && game.current_number !== prevCalledNumberRef.current && game.status === 'playing') {
+      prevCalledNumberRef.current = game.current_number;
+      soundAnnouncer.announceNumber(game.current_number);
+    }
+  }, [game?.current_number, game?.status]);
+
+  // Winner celebration sound
+  useEffect(() => {
+    if (game?.status === 'finished' && game.winner_ids && game.winner_ids.length > 0) {
+      soundAnnouncer.playWinFanfare();
+    }
+  }, [game?.status, game?.winner_ids]);
+
   // Cache winners when game finishes
   useEffect(() => {
     if (game?.status === 'finished' && game.winner_ids && game.winner_ids.length > 0) {
@@ -77,8 +95,9 @@ export function GameRoom({ gameId, playerId, onReturnToLobby }: GameRoomProps) {
   // Server-synchronized countdown for returning to lobby
   useEffect(() => {
     if (game?.status === 'finished' && game.return_to_lobby_at) {
+      const returnTarget = game.return_to_lobby_at;
       const updateCountdown = () => {
-        const returnTime = new Date(game.return_to_lobby_at).getTime();
+        const returnTime = new Date(returnTarget).getTime();
         const now = Date.now();
         const remainingMs = returnTime - now;
         const remainingSeconds = Math.ceil(remainingMs / 1000);
@@ -500,13 +519,13 @@ export function GameRoom({ gameId, playerId, onReturnToLobby }: GameRoomProps) {
                       return winningPattern.cells.some(([c, r]) => c === col && r === row);
                     };
 
-                    const getLastWinningNumber = () => {
+                    const getLastWinningNumber = (): { col: number; row: number; number: number } | null => {
                       if (!winningPattern || !winningPattern.cells) return null;
 
-                      let lastNumber = null;
+                      let lastNumber: { col: number; row: number; number: number } | null = null;
                       let lastIndex = -1;
 
-                      winningPattern.cells.forEach(([col, row]) => {
+                      winningPattern.cells.forEach(([col, row]: [number, number]) => {
                         if (col === 2 && row === 2) return;
 
                         const number = winner.card_numbers[col][row];
@@ -684,11 +703,19 @@ export function GameRoom({ gameId, playerId, onReturnToLobby }: GameRoomProps) {
                 )}
                 <div className={`rounded-lg p-1.5 sm:p-2 text-center transition-colors duration-300 ${isDarkMode ? 'bg-blue-700 border border-blue-600' : 'bg-blue-600'} text-white`}>
                   {game.current_number && (
-                    <div className={`rounded-lg p-1.5 sm:p-2 flex items-center justify-center gap-2 sm:gap-3 ${isDarkMode ? 'bg-blue-600' : 'bg-blue-700'}`}>
+                    <div className={`rounded-lg p-1.5 sm:p-2 flex items-center justify-between gap-2 sm:gap-3 ${isDarkMode ? 'bg-blue-600' : 'bg-blue-700'}`}>
                       <div className="text-xs sm:text-sm lg:text-base font-bold">Current Call</div>
-                      <div className="bg-orange-500 text-white rounded-full px-2.5 sm:px-3 lg:px-4 py-1 sm:py-1.5 text-base sm:text-lg lg:text-xl font-bold">
-                        {getBingoLetter(game.current_number)}-{game.current_number}
+                      <div className="bg-orange-500 text-white rounded-full px-2.5 sm:px-3 lg:px-4 py-1 sm:py-1.5 text-base sm:text-lg lg:text-xl font-bold flex items-center gap-1.5 shadow-md">
+                        <span>{getBingoLetter(game.current_number)}-{game.current_number}</span>
+                        <span className="text-xs font-ethiopic opacity-90">({getAmharicLetter(game.current_number)}-{numberToAmharicWord(game.current_number)})</span>
                       </div>
+                      <button
+                        onClick={() => setIsAudioMuted(soundAnnouncer.toggleMute())}
+                        className="p-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white transition-colors"
+                        title={isAudioMuted ? "Unmute local announcer" : "Mute local announcer"}
+                      >
+                        {isAudioMuted ? <VolumeX className="w-4 h-4 text-red-300" /> : <Volume2 className="w-4 h-4 text-green-300 animate-pulse" />}
+                      </button>
                     </div>
                   )}
                 </div>

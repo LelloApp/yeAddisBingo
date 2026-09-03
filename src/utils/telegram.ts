@@ -6,83 +6,111 @@ export interface TelegramUser {
   last_name?: string;
   username?: string;
   language_code?: string;
-  is_premium?: boolean;
   photo_url?: string;
 }
 
-export interface TelegramWebAppData {
+export interface TelegramAppInit {
   user: TelegramUser | null;
+  startParam: string | null; // e.g. 'group_vip_club'
+  groupIdFromParam: string | null; // extracted group slug or ID
   isAvailable: boolean;
   platform: string;
 }
 
-export function initTelegram(): TelegramWebAppData {
-  try {
-    console.log('[Telegram] Initializing WebApp SDK...', {
-      hasWindow: typeof window !== 'undefined',
-      hasWebApp: !!WebApp,
-      webAppVersion: WebApp?.version,
-      platform: WebApp?.platform,
-    });
+export function initTelegramApp(): TelegramAppInit {
+  let user: TelegramUser | null = null;
+  let startParam: string | null = null;
+  let isAvailable = false;
+  let platform = 'unknown';
 
-    if (typeof window !== 'undefined' && WebApp) {
-      WebApp.ready();
-      WebApp.expand();
+  if (typeof window !== 'undefined') {
+    try {
+      if (WebApp) {
+        WebApp.ready();
+        WebApp.expand(); // Make mini app fill full screen
 
-      console.log('[Telegram] WebApp.initDataUnsafe:', WebApp.initDataUnsafe);
-      console.log('[Telegram] WebApp.initData:', WebApp.initData);
+        // Prevent accidental swipe-down closure on iOS
+        WebApp.enableClosingConfirmation();
 
-      const user = WebApp.initDataUnsafe?.user;
+        isAvailable = true;
+        platform = WebApp.platform || 'unknown';
 
-      if (user) {
-        console.log('[Telegram] User detected:', {
-          id: user.id,
-          username: user.username,
-          first_name: user.first_name,
-        });
+        if (WebApp.initDataUnsafe?.user) {
+          const u = WebApp.initDataUnsafe.user;
+          user = {
+            id: u.id,
+            first_name: u.first_name,
+            last_name: u.last_name,
+            username: u.username,
+            language_code: u.language_code,
+            photo_url: u.photo_url,
+          };
+        }
 
-        return {
-          user: {
-            id: user.id,
-            first_name: user.first_name,
-            last_name: user.last_name,
-            username: user.username,
-            language_code: user.language_code,
-            is_premium: user.is_premium,
-            photo_url: user.photo_url,
-          },
-          isAvailable: true,
-          platform: WebApp.platform,
-        };
-      } else {
-        console.warn('[Telegram] WebApp initialized but no user data found');
+        // 1. Get from WebApp SDK
+        if (WebApp.initDataUnsafe?.start_param) {
+          startParam = WebApp.initDataUnsafe.start_param;
+        }
       }
-    } else {
-      console.warn('[Telegram] WebApp SDK not available');
-    }
 
-    return {
-      user: null,
-      isAvailable: false,
-      platform: 'unknown',
-    };
-  } catch (error) {
-    console.error('[Telegram] Error initializing Telegram Web App:', error);
-    return {
-      user: null,
-      isAvailable: false,
-      platform: 'unknown',
-    };
+      // 2. Fallback check: URL query parameters (?tgWebAppStartParam=... or ?startapp=... or ?group=...)
+      const urlParams = new URLSearchParams(window.location.search);
+      if (!startParam) {
+        startParam = urlParams.get('tgWebAppStartParam') || urlParams.get('startapp') || urlParams.get('group');
+      }
+
+      // 3. Fallback check: URL hash fragment
+      if (!startParam && window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        startParam = hashParams.get('tgWebAppStartParam') || hashParams.get('startapp');
+      }
+    } catch (e) {
+      console.error('Error initializing Telegram WebApp SDK:', e);
+    }
+  }
+
+  // Parse group slug if format is 'group_<slug>'
+  let groupIdFromParam: string | null = null;
+  if (startParam) {
+    if (startParam.startsWith('group_')) {
+      groupIdFromParam = startParam.replace('group_', '');
+    } else {
+      groupIdFromParam = startParam;
+    }
+  }
+
+  return {
+    user,
+    startParam,
+    groupIdFromParam,
+    isAvailable,
+    platform,
+  };
+}
+
+// Telegram Haptic Feedback
+export function triggerHaptic(type: 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error' = 'medium') {
+  try {
+    if (WebApp?.HapticFeedback) {
+      if (['light', 'medium', 'heavy'].includes(type)) {
+        WebApp.HapticFeedback.impactOccurred(type as 'light' | 'medium' | 'heavy');
+      } else {
+        WebApp.HapticFeedback.notificationOccurred(type as 'error' | 'success' | 'warning');
+      }
+    }
+  } catch {
+    // Ignore if not in mobile Telegram client
   }
 }
 
+// Backward-compatible alias
+export const initTelegram = initTelegramApp;
+
 export function getTelegramDisplayName(user: TelegramUser | null): string {
   if (!user) return '';
-
   if (user.username) {
     return `@${user.username}`;
   }
-
   return user.first_name + (user.last_name ? ` ${user.last_name}` : '');
 }
 
@@ -128,3 +156,4 @@ export function disableTelegramClosingConfirmation(): void {
     console.error('Error disabling closing confirmation:', error);
   }
 }
+

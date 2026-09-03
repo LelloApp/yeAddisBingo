@@ -9,6 +9,8 @@ import { NetworkQualityIndicator } from './components/NetworkQualityIndicator';
 import { supabase } from './lib/supabase';
 import { initTelegram, TelegramUser } from './utils/telegram';
 import { config, queryClient } from './lib/walletConfig';
+import { GroupSelector, BingoGroup } from './components/GroupSelector';
+import { ExternalLink, X, ArrowLeft } from 'lucide-react';
 
 const Admin = lazy(() => import('./components/Admin').then(module => ({ default: module.Admin })));
 
@@ -23,6 +25,9 @@ function AppContent() {
   const [gameStarted, setGameStarted] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [userBalance, setUserBalance] = useState(0);
+  const [selectedGroup, setSelectedGroup] = useState<BingoGroup | null>(null);
+  const [groups, setGroups] = useState<BingoGroup[]>([]);
+  const [insufficientModalGroup, setInsufficientModalGroup] = useState<BingoGroup | null>(null);
   const walletRegistered = useRef(false);
 
   useEffect(() => {
@@ -31,6 +36,172 @@ function AppContent() {
       setAppUser(telegramData.user);
     }
   }, []);
+
+  // Fetch active groups and check deep link params
+  useEffect(() => {
+    const DEFAULT_ROOMS: BingoGroup[] = [
+      {
+        id: 'starter_room',
+        slug: 'starter_room',
+        name: '🎯 Starter Room (10 ETB)',
+        admin_name: 'Parcelic Admin',
+        admin_username: 'parcelic',
+        stake_amount: 10,
+        min_balance: 10,
+        online_players_count: 0,
+      },
+      {
+        id: 'addis_classic',
+        slug: 'addis_classic',
+        name: '🎲 Addis Classic (20 ETB)',
+        admin_name: 'Parcelic Admin',
+        admin_username: 'parcelic',
+        stake_amount: 20,
+        min_balance: 20,
+        online_players_count: 0,
+      },
+      {
+        id: 'vip_diamond',
+        slug: 'vip_diamond',
+        name: '💎 VIP Diamond Club (50 ETB)',
+        admin_name: 'Parcelic Admin',
+        admin_username: 'parcelic',
+        stake_amount: 50,
+        min_balance: 50,
+        online_players_count: 0,
+      },
+      {
+        id: 'high_roller',
+        slug: 'high_roller',
+        name: '👑 High Roller Room (100 ETB)',
+        admin_name: 'Parcelic Admin',
+        admin_username: 'parcelic',
+        stake_amount: 100,
+        min_balance: 100,
+        online_players_count: 0,
+      },
+      {
+        id: 'fekadu_kera',
+        slug: 'fekadu_kera',
+        name: '🐮 ፍቃዱ ቄራ (10 ETB)',
+        admin_name: 'Parcelic Admin',
+        admin_username: 'parcelic',
+        stake_amount: 10,
+        min_balance: 10,
+        online_players_count: 0,
+      },
+      {
+        id: 'hasen_stadium',
+        slug: 'hasen_stadium',
+        name: '⚽️ ሀሰን ስታዲየም (10 ETB)',
+        admin_name: 'Parcelic Admin',
+        admin_username: 'parcelic',
+        stake_amount: 10,
+        min_balance: 10,
+        online_players_count: 0,
+      },
+    ];
+
+    const fetchGroups = async () => {
+      try {
+        let loadedGroups: any[] | null = null;
+        const { data: activeData, error: activeErr } = await supabase
+          .from('groups')
+          .select('*')
+          .eq('is_active', true);
+
+        if (!activeErr && activeData && activeData.length > 0) {
+          loadedGroups = activeData;
+        } else {
+          const { data: allData } = await supabase.from('groups').select('*');
+          if (allData && allData.length > 0) {
+            loadedGroups = allData;
+          }
+        }
+
+        const validSlugs = new Set(['starter_room', 'addis_classic', 'vip_diamond', 'high_roller', 'fekadu_kera', 'hasen_stadium']);
+        const filtered = (loadedGroups && loadedGroups.length > 0)
+          ? loadedGroups.filter(
+              (g: any) =>
+                validSlugs.has(g.slug) &&
+                (g.name.includes('🎯') ||
+                  g.name.includes('🎲') ||
+                  g.name.includes('💎') ||
+                  g.name.includes('👑') ||
+                  g.name.includes('🐮') ||
+                  g.name.includes('⚽️'))
+            )
+          : [];
+
+        const formatted: BingoGroup[] = filtered.length > 0
+          ? filtered.map((g: any) => ({
+              id: g.id,
+              slug: g.slug || g.id,
+              name: g.name,
+              admin_name: g.admin_name || 'Parcelic Admin',
+              admin_username: g.admin_username || 'parcelic',
+              stake_amount: g.stake_amount || 10,
+              min_balance: g.min_balance || 10,
+              online_players_count: g.online_players_count || 0,
+            }))
+          : DEFAULT_ROOMS;
+
+        setGroups(formatted);
+
+        const tg = initTelegram();
+        if (tg.groupIdFromParam) {
+          const matched = formatted.find(
+            (g) => g.slug === tg.groupIdFromParam || g.id === tg.groupIdFromParam
+          );
+          if (matched) {
+            if (userBalance >= matched.min_balance) {
+              setSelectedGroup(matched);
+            } else {
+              setInsufficientModalGroup(matched);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch rooms from DB, using defaults:', err);
+        setGroups(DEFAULT_ROOMS);
+      }
+    };
+    fetchGroups();
+  }, [userBalance]);
+
+  // Sync user balance for group gating
+  useEffect(() => {
+    if (!appUser?.id) return;
+    const loadUserBalance = async () => {
+      const { data } = await supabase
+        .from('telegram_users')
+        .select('balance, deposited_balance, won_balance')
+        .eq('telegram_user_id', appUser.id)
+        .maybeSingle();
+
+      if (data) {
+        const total = (data.deposited_balance || 0) + (data.won_balance || 0) || data.balance || 0;
+        setUserBalance(total);
+
+        // Check if user came from a deep link for a specific group
+        const tg = initTelegram();
+        if (tg.groupIdFromParam && groups.length > 0) {
+          const matched = groups.find(
+            (g) => g.slug === tg.groupIdFromParam || g.id === tg.groupIdFromParam
+          );
+          if (matched) {
+            if (total >= matched.min_balance) {
+              setSelectedGroup(matched);
+            } else {
+              setInsufficientModalGroup(matched);
+              setSelectedGroup(null);
+            }
+          }
+        }
+      }
+    };
+    loadUserBalance();
+  }, [appUser?.id, groups]);
 
   useEffect(() => {
     if (appUser || !isConnected || !address || walletRegistered.current) return;
@@ -322,8 +493,88 @@ function AppContent() {
     );
   }
 
+  if (!selectedGroup && view === 'lobby' && !gameStarted) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between">
+        <GroupSelector
+          groups={groups}
+          userBalance={userBalance}
+          onSelectGroup={(group) => setSelectedGroup(group)}
+          onOpenDepositGuide={(group) => setInsufficientModalGroup(group)}
+        />
+
+        {insufficientModalGroup && (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+              <div className="flex justify-between items-start">
+                <h3 className="font-bold text-lg text-white">Insufficient Balance</h3>
+                <button
+                  onClick={() => setInsufficientModalGroup(null)}
+                  className="text-gray-400 hover:text-white p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-300">
+                To join <b className="text-amber-400">{insufficientModalGroup.name}</b>, you need at least{' '}
+                <b className="text-green-400">{insufficientModalGroup.min_balance} ETB</b> in your account.
+              </p>
+              <div className="bg-slate-800/80 rounded-xl p-3 text-xs text-gray-300 flex justify-between">
+                <span>Your Current Balance:</span>
+                <span className="font-bold text-amber-400">{userBalance} ETB</span>
+              </div>
+              <div className="pt-2 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    const target = insufficientModalGroup.admin_username || 'parcelic';
+                    const clean = target.replace(/^@/, '');
+                    const url = `https://t.me/${clean}`;
+                    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.openTelegramLink) {
+                      (window as any).Telegram.WebApp.openTelegramLink(url);
+                    } else if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.openLink) {
+                      (window as any).Telegram.WebApp.openLink(url);
+                    } else {
+                      window.open(url, '_blank');
+                    }
+                  }}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-center flex items-center justify-center gap-2 shadow-lg text-sm active:scale-95 transition-all"
+                >
+                  <span>Contact Admin (@{insufficientModalGroup.admin_username || 'parcelic'})</span>
+                  <ExternalLink className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setInsufficientModalGroup(null)}
+                  className="bg-slate-800 hover:bg-slate-700 text-gray-300 py-2 px-4 rounded-xl text-xs font-semibold"
+                >
+                  Choose Another Room
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        <NetworkQualityIndicator />
+      </div>
+    );
+  }
+
   return (
     <>
+      {selectedGroup && (
+        <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center justify-between text-xs text-gray-300 sticky top-0 z-30 shadow-md">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="font-bold text-amber-400">{selectedGroup.name}</span>
+            <span className="text-slate-400">({selectedGroup.stake_amount} ETB)</span>
+          </div>
+          <button
+            onClick={() => setSelectedGroup(null)}
+            className="flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg transition-colors font-medium text-[11px]"
+          >
+            <ArrowLeft className="w-3 h-3" />
+            <span>Switch Room</span>
+          </button>
+        </div>
+      )}
       <Lobby onJoinGame={handleJoinGame} onSpectateGame={handleSpectateGame} telegramUser={appUser} />
       {appUser && (
         <WalletDepositModal

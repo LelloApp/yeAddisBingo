@@ -57,7 +57,7 @@ export function Lobby({ onJoinGame, onSpectateGame, telegramUser }: LobbyProps) 
   const [isWalletDepositModalOpen, setIsWalletDepositModalOpen] = useState(false);
   const [isBnbWithdrawalModalOpen, setIsBnbWithdrawalModalOpen] = useState(false);
 
-  const canPlay = !!telegramUser && !!registeredUser && isWalletConnected;
+  const canPlay = !!telegramUser;
 
   const addToast = useCallback((message: string, type: 'success' | 'error' | 'info') => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -696,7 +696,7 @@ export function Lobby({ onJoinGame, onSpectateGame, telegramUser }: LobbyProps) 
     return numberStatusMap.get(num)?.playerName || null;
   }, [numberStatusMap]);
 
-  const numberGrid = useMemo(() => Array.from({ length: 400 }, (_, i) => i + 1), []);
+  const numberGrid = useMemo(() => Array.from({ length: 100 }, (_, i) => i + 1), []);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('darkMode');
@@ -709,26 +709,21 @@ export function Lobby({ onJoinGame, onSpectateGame, telegramUser }: LobbyProps) 
 
   const displayName = telegramUser?.first_name || (walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : 'Player');
 
+  const totalBalance = (registeredUser?.deposited_balance || 0) + (registeredUser?.won_balance || 0) || (registeredUser?.balance || 0);
+
   return (
     <div className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800' : 'bg-gradient-to-br from-blue-50 to-indigo-100'} p-2 sm:p-4`}>
       <div className="max-w-4xl mx-auto pt-1">
-        <div className={`rounded-2xl mb-2 transition-all duration-300 overflow-hidden ${isDarkMode ? 'bg-gray-800/90 border border-gray-700/40 shadow-lg shadow-black/20' : 'bg-white/95 border border-gray-200/60 shadow-lg shadow-black/5'}`}>
+        <div className={`rounded-2xl mb-3 transition-all duration-300 overflow-hidden ${isDarkMode ? 'bg-gray-800/90 border border-gray-700/40 shadow-lg shadow-black/20' : 'bg-white/95 border border-gray-200/60 shadow-lg shadow-black/5'}`}>
           <div className="flex items-center justify-between px-3 py-2.5 sm:px-4 sm:py-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="min-w-0">
-                <p className={`text-sm font-semibold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                <p className={`text-sm font-bold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                   {displayName}
                 </p>
-                {isWalletConnected && walletAddress ? (
-                  <div className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-                    <span className={`text-[11px] font-mono truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-                    </span>
-                  </div>
-                ) : (
-                  <p className={`text-[11px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>No wallet</p>
-                )}
+                <p className={`text-[11px] font-medium ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                  @{telegramUser?.username || 'player'}
+                </p>
               </div>
             </div>
 
@@ -771,87 +766,29 @@ export function Lobby({ onJoinGame, onSpectateGame, telegramUser }: LobbyProps) 
           </div>
 
           <div className={`flex items-stretch border-t ${isDarkMode ? 'border-gray-700/40 bg-gray-900/30' : 'border-gray-100 bg-gray-50/50'}`}>
-            <div className={`flex-1 flex items-center justify-center gap-1.5 py-2 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+            <div className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
               <Hash className="w-3.5 h-3.5 opacity-60" />
-              <span className="text-base font-bold tabular-nums">{selectedNumber || '--'}</span>
+              <span className="text-xs text-gray-400 font-normal">Card:</span>
+              <span className="text-sm font-bold tabular-nums">{selectedNumber || '--'}</span>
             </div>
 
             <div className={`w-px ${isDarkMode ? 'bg-gray-700/40' : 'bg-gray-200/80'}`} />
 
-            {registeredUser && (
-              <>
-                <div className={`flex-1 flex items-center justify-center gap-1.5 py-2 transition-all ${balanceChanged ? 'scale-105' : ''} ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                  <Coins className="w-3.5 h-3.5 opacity-60" />
-                  <span className="text-base font-bold tabular-nums">{formatBnb(registeredUser.deposited_balance + registeredUser.won_balance)}</span>
-                </div>
-                <div className={`w-px ${isDarkMode ? 'bg-gray-700/40' : 'bg-gray-200/80'}`} />
-              </>
-            )}
+            <div className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 transition-all ${balanceChanged ? 'scale-105' : ''} ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+              <Coins className="w-3.5 h-3.5 opacity-60" />
+              <span className="text-xs text-gray-400 font-normal">Balance:</span>
+              <span className="text-sm font-bold tabular-nums">{totalBalance} ETB</span>
+            </div>
 
-            {registeredUser && registeredUser.won_balance > 0 && (
-              <>
-                <div className={`flex-1 flex items-center justify-center gap-1.5 py-2 ${isDarkMode ? 'text-yellow-400' : 'text-yellow-600'}`}>
-                  <Trophy className="w-3.5 h-3.5 opacity-60" />
-                  <span className="text-base font-bold tabular-nums">{formatBnb(registeredUser.won_balance)}</span>
-                </div>
-                <div className={`w-px ${isDarkMode ? 'bg-gray-700/40' : 'bg-gray-200/80'}`} />
-              </>
-            )}
+            <div className={`w-px ${isDarkMode ? 'bg-gray-700/40' : 'bg-gray-200/80'}`} />
 
-            {activeGame && (
-              <div className={`flex-1 flex items-center justify-center gap-1.5 py-2 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                <Wallet className="w-3.5 h-3.5 opacity-60" />
-                <span className="text-base font-bold tabular-nums">{formatBnb(activeGame.stake_amount)}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Connect Wallet Prompt */}
-        {!isWalletConnected && (
-          <div className={`border-l-4 p-3 mb-3 rounded transition-colors duration-300 ${isDarkMode ? 'bg-yellow-900/20 border-yellow-600 text-yellow-300' : 'bg-yellow-50 border-yellow-400 text-yellow-800'}`}>
-            <p className="text-sm font-semibold mb-2">Connect Your BNB Wallet to Play</p>
-            <p className="text-xs mb-2 opacity-90">A wallet connection is required to deposit, withdraw, and play games.</p>
-            <WalletConnect
-              telegramUserId={telegramUser?.id || 0}
-              onWalletConnected={() => addToast('Wallet connected!', 'success')}
-            />
-          </div>
-        )}
-
-        {/* Wallet connected, ready to play */}
-        {isWalletConnected && registeredUser && (
-          <div className={`border-l-4 p-3 mb-3 rounded transition-colors duration-300 ${isDarkMode ? 'bg-emerald-900/20 border-emerald-600 text-emerald-300' : 'bg-emerald-50 border-emerald-400 text-emerald-800'}`}>
-            <p className="text-sm font-semibold mb-2">Crypto (BNB) Deposits & Withdrawals</p>
-            <p className="text-xs mb-2 opacity-90">Deposit BNB to play or withdraw your winnings ({activeGame ? formatBnb(activeGame.stake_amount) : '0.10'} BNB per game)</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setIsWalletDepositModalOpen(true)}
-                className="flex-1 py-2 px-4 rounded-lg font-semibold transition-colors bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                Deposit BNB
-              </button>
-              <button
-                onClick={() => setIsBnbWithdrawalModalOpen(true)}
-                disabled={(!registeredUser.won_balance || registeredUser.won_balance === 0) && (!registeredUser.deposited_balance || registeredUser.deposited_balance === 0)}
-                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-colors ${
-                  (registeredUser.won_balance > 0 || registeredUser.deposited_balance > 0)
-                    ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
-                    : isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                Withdraw BNB
-              </button>
+            <div className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+              <Wallet className="w-3.5 h-3.5 opacity-60" />
+              <span className="text-xs text-gray-400 font-normal">Stake:</span>
+              <span className="text-sm font-bold tabular-nums">{activeGame?.stake_amount || 10} ETB</span>
             </div>
           </div>
-        )}
-
-        {/* Loading registration */}
-        {isWalletConnected && !registeredUser && isCheckingRegistration && (
-          <div className={`border-l-4 p-3 mb-3 rounded transition-colors duration-300 ${isDarkMode ? 'bg-blue-900/20 border-blue-600 text-blue-300' : 'bg-blue-50 border-blue-400 text-blue-800'}`}>
-            <p className="text-sm font-medium">Setting up your account...</p>
-          </div>
-        )}
+        </div>
 
         {activeGame && countdown > 25 && activeGame.status === 'waiting' && (
           <div className={`border-l-4 p-2 mb-3 rounded transition-colors duration-300 ${isDarkMode ? 'bg-blue-900/20 border-blue-500 text-blue-300' : 'bg-blue-50 border-blue-400 text-blue-800'}`}>
@@ -882,7 +819,7 @@ export function Lobby({ onJoinGame, onSpectateGame, telegramUser }: LobbyProps) 
                 <span className={isDarkMode ? 'text-gray-300' : 'text-gray-600'}>Taken</span>
               </div>
             </div>
-            <span className={`text-[10px] sm:text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-500'}`}>{takenNumbers.length}/400</span>
+            <span className={`text-[10px] sm:text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-500'}`}>{takenNumbers.length}/100</span>
           </div>
 
           <div className="grid grid-cols-10 sm:grid-cols-15 md:grid-cols-20 gap-1 max-h-[40vh] overflow-y-auto p-1">
