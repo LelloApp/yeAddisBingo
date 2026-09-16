@@ -29,7 +29,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const supabase = getSupabaseClient();
-    const { gameId, cardNumber, telegramUserId, playerName, telegramUsername, telegramFirstName, telegramLastName, cardLayout: providedLayout } = await req.json();
+    const { gameId, cardNumber, telegramUserId, playerName, telegramUsername, telegramFirstName, telegramLastName, cardLayout: providedLayout, adminId } = await req.json();
 
     if (!telegramUserId || telegramUserId <= 0) {
       return new Response(
@@ -64,11 +64,16 @@ Deno.serve(async (req: Request) => {
     const markedCells = Array(5).fill(null).map(() => Array(5).fill(false));
     markedCells[2][2] = true;
 
-    const { data: result, error: rpcError } = await supabase
-      .rpc('select_card_atomic', {
+    let result: any = null;
+    let rpcError: any = null;
+
+    // Try select_card_atomic_v2 with adminId
+    const { data: v2Result, error: v2Error } = await supabase
+      .rpc('select_card_atomic_v2', {
         p_game_id: gameId,
         p_card_number: cardNumber,
         p_telegram_user_id: telegramUserId,
+        p_admin_id: adminId || null,
         p_player_name: playerName,
         p_card: card,
         p_card_numbers: card,
@@ -77,6 +82,27 @@ Deno.serve(async (req: Request) => {
         p_telegram_first_name: telegramFirstName || null,
         p_telegram_last_name: telegramLastName || null
       });
+
+    if (!v2Error && v2Result) {
+      result = v2Result;
+    } else {
+      // Fallback to legacy select_card_atomic if v2 is not available
+      const { data: legacyResult, error: legacyError } = await supabase
+        .rpc('select_card_atomic', {
+          p_game_id: gameId,
+          p_card_number: cardNumber,
+          p_telegram_user_id: telegramUserId,
+          p_player_name: playerName,
+          p_card: card,
+          p_card_numbers: card,
+          p_marked_cells: markedCells,
+          p_telegram_username: telegramUsername || null,
+          p_telegram_first_name: telegramFirstName || null,
+          p_telegram_last_name: telegramLastName || null
+        });
+      result = legacyResult;
+      rpcError = legacyError;
+    }
 
     if (rpcError) {
       return new Response(

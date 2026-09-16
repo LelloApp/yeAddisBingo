@@ -62,6 +62,15 @@ Deno.serve(async (req: Request) => {
             return_to_lobby_at: returnToLobbyAt.toISOString()
           })
           .eq('id', game.id);
+
+        try {
+          await supabase.rpc('ensure_room_waiting_game', {
+            p_room_id: game.room_id || 'starter_room'
+          });
+        } catch {
+          // Ignore RPC error
+        }
+
         results.push({ gameId: game.id, status: 'finished', reason: 'all_numbers_called' });
         continue;
       }
@@ -81,6 +90,15 @@ Deno.serve(async (req: Request) => {
             return_to_lobby_at: returnToLobbyAt.toISOString()
           })
           .eq('id', game.id);
+
+        try {
+          await supabase.rpc('ensure_room_waiting_game', {
+            p_room_id: game.room_id || 'starter_room'
+          });
+        } catch {
+          // Ignore RPC error
+        }
+
         results.push({ gameId: game.id, status: 'finished' });
         continue;
       }
@@ -111,7 +129,7 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       {
         status: 500,
         headers: {

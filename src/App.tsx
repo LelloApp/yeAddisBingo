@@ -6,7 +6,7 @@ import { Lobby } from './components/Lobby';
 import { GameRoom } from './components/GameRoom';
 import { WalletDepositModal } from './components/WalletDepositModal';
 import { NetworkQualityIndicator } from './components/NetworkQualityIndicator';
-import { supabase } from './lib/supabase';
+import { supabase, Admin as AdminType } from './lib/supabase';
 import { initTelegram, TelegramUser } from './utils/telegram';
 import { config, queryClient } from './lib/walletConfig';
 import { GroupSelector, BingoGroup } from './components/GroupSelector';
@@ -27,6 +27,8 @@ function AppContent() {
   const [userBalance, setUserBalance] = useState(0);
   const [selectedGroup, setSelectedGroup] = useState<BingoGroup | null>(null);
   const [groups, setGroups] = useState<BingoGroup[]>([]);
+  const [admins, setAdmins] = useState<AdminType[]>([]);
+  const [selectedAdmin, setSelectedAdmin] = useState<AdminType | null>(null);
   const [insufficientModalGroup, setInsufficientModalGroup] = useState<BingoGroup | null>(null);
   const walletRegistered = useRef(false);
 
@@ -37,9 +39,19 @@ function AppContent() {
     }
   }, []);
 
-  // Fetch active groups and check deep link params
+  // Fetch 6 active rooms and admins, check deep link params
   useEffect(() => {
     const DEFAULT_ROOMS: BingoGroup[] = [
+      {
+        id: 'beginner_room',
+        slug: 'beginner_room',
+        name: '🌱 Beginner Room (5 ETB)',
+        admin_name: 'Parcelic Admin',
+        admin_username: 'parcelic',
+        stake_amount: 5,
+        min_balance: 5,
+        online_players_count: 5,
+      },
       {
         id: 'starter_room',
         slug: 'starter_room',
@@ -48,131 +60,167 @@ function AppContent() {
         admin_username: 'parcelic',
         stake_amount: 10,
         min_balance: 10,
-        online_players_count: 0,
+        online_players_count: 20,
+      },
+      {
+        id: 'standard_room',
+        slug: 'standard_room',
+        name: '🎲 Standard Room (15 ETB)',
+        admin_name: 'Parcelic Admin',
+        admin_username: 'parcelic',
+        stake_amount: 15,
+        min_balance: 15,
+        online_players_count: 30,
       },
       {
         id: 'addis_classic',
         slug: 'addis_classic',
-        name: '🎲 Addis Classic (20 ETB)',
+        name: '🏆 Addis Classic (20 ETB)',
         admin_name: 'Parcelic Admin',
         admin_username: 'parcelic',
         stake_amount: 20,
         min_balance: 20,
-        online_players_count: 0,
+        online_players_count: 30,
       },
       {
         id: 'vip_diamond',
         slug: 'vip_diamond',
-        name: '💎 VIP Diamond Club (50 ETB)',
+        name: '💎 VIP Diamond (50 ETB)',
         admin_name: 'Parcelic Admin',
         admin_username: 'parcelic',
         stake_amount: 50,
         min_balance: 50,
-        online_players_count: 0,
+        online_players_count: 30,
       },
       {
         id: 'high_roller',
         slug: 'high_roller',
-        name: '👑 High Roller Room (100 ETB)',
+        name: '👑 High Roller (100 ETB)',
         admin_name: 'Parcelic Admin',
         admin_username: 'parcelic',
         stake_amount: 100,
         min_balance: 100,
-        online_players_count: 0,
-      },
-      {
-        id: 'fekadu_kera',
-        slug: 'fekadu_kera',
-        name: '🐮 ፍቃዱ ቄራ (10 ETB)',
-        admin_name: 'Parcelic Admin',
-        admin_username: 'parcelic',
-        stake_amount: 10,
-        min_balance: 10,
-        online_players_count: 0,
-      },
-      {
-        id: 'hasen_stadium',
-        slug: 'hasen_stadium',
-        name: '⚽️ ሀሰን ስታዲየም (10 ETB)',
-        admin_name: 'Parcelic Admin',
-        admin_username: 'parcelic',
-        stake_amount: 10,
-        min_balance: 10,
-        online_players_count: 0,
+        online_players_count: 30,
       },
     ];
 
-    const fetchGroups = async () => {
+    const fetchRoomsAndAdmins = async () => {
       try {
-        let loadedGroups: any[] | null = null;
-        const { data: activeData, error: activeErr } = await supabase
-          .from('groups')
+        // 1. Fetch Rooms from bingo_rooms table
+        let loadedRooms: BingoGroup[] = DEFAULT_ROOMS;
+        const { data: dbRooms, error: roomErr } = await supabase
+          .from('bingo_rooms')
           .select('*')
-          .eq('is_active', true);
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true });
 
-        if (!activeErr && activeData && activeData.length > 0) {
-          loadedGroups = activeData;
+        if (!roomErr && dbRooms && dbRooms.length > 0) {
+          loadedRooms = dbRooms.map((r: any) => ({
+            id: r.id,
+            slug: r.slug || r.id,
+            name: r.name,
+            admin_name: 'Parcelic Admin',
+            admin_username: 'parcelic',
+            stake_amount: r.stake_amount || 10,
+            min_balance: r.min_balance || 10,
+            online_players_count: r.display_online_count || 20,
+          }));
+        }
+        setGroups(loadedRooms);
+
+        // 2. Fetch Admins
+        let loadedAdmins: AdminType[] = [];
+        const { data: dbAdmins } = await supabase
+          .from('admins')
+          .select('*')
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true });
+
+        if (dbAdmins && dbAdmins.length > 0) {
+          loadedAdmins = dbAdmins;
+          setAdmins(dbAdmins);
         } else {
-          const { data: allData } = await supabase.from('groups').select('*');
-          if (allData && allData.length > 0) {
-            loadedGroups = allData;
-          }
+          loadedAdmins = [
+            {
+              id: '00000000-0000-0000-0000-000000000001',
+              slug: 'parcelic',
+              display_name: 'Parcelic Admin',
+              telegram_username: 'parcelic',
+              commission_rate: 0.10,
+            },
+            {
+              id: '00000000-0000-0000-0000-000000000002',
+              slug: 'fekadu_kera',
+              display_name: 'ፍቃዱ ቄራ (Fekadu Kera)',
+              telegram_username: 'fekadu_kera_bot',
+              commission_rate: 0.10,
+            },
+            {
+              id: '00000000-0000-0000-0000-000000000003',
+              slug: 'hasen_stadium',
+              display_name: 'ሀሰን ስታዲየም (Hasen Stadium)',
+              telegram_username: 'hasen_stadium_bot',
+              commission_rate: 0.10,
+            },
+          ];
+          setAdmins(loadedAdmins);
         }
 
-        const validSlugs = new Set(['starter_room', 'addis_classic', 'vip_diamond', 'high_roller', 'fekadu_kera', 'hasen_stadium']);
-        const filtered = (loadedGroups && loadedGroups.length > 0)
-          ? loadedGroups.filter(
-              (g: any) =>
-                validSlugs.has(g.slug) &&
-                (g.name.includes('🎯') ||
-                  g.name.includes('🎲') ||
-                  g.name.includes('💎') ||
-                  g.name.includes('👑') ||
-                  g.name.includes('🐮') ||
-                  g.name.includes('⚽️'))
-            )
-          : [];
-
-        const formatted: BingoGroup[] = filtered.length > 0
-          ? filtered.map((g: any) => ({
-              id: g.id,
-              slug: g.slug || g.id,
-              name: g.name,
-              admin_name: g.admin_name || 'Parcelic Admin',
-              admin_username: g.admin_username || 'parcelic',
-              stake_amount: g.stake_amount || 10,
-              min_balance: g.min_balance || 10,
-              online_players_count: g.online_players_count || 0,
-            }))
-          : DEFAULT_ROOMS;
-
-        setGroups(formatted);
-
+        // 3. Handle deep link params
         const tg = initTelegram();
-        if (tg.groupIdFromParam) {
-          const matched = formatted.find(
-            (g) => g.slug === tg.groupIdFromParam || g.id === tg.groupIdFromParam
+        const urlParams = new URLSearchParams(window.location.search);
+        const adminParam = tg.adminIdFromParam || urlParams.get('admin');
+
+        if (adminParam && loadedAdmins.length > 0) {
+          const matchedAdmin = loadedAdmins.find(
+            (a) => a.id === adminParam || a.slug === adminParam || a.telegram_username?.replace(/^@/, '') === adminParam.replace(/^@/, '')
           );
-          if (matched) {
-            if (userBalance >= matched.min_balance) {
-              setSelectedGroup(matched);
-            } else {
-              setInsufficientModalGroup(matched);
-            }
+          if (matchedAdmin) {
+            setSelectedAdmin(matchedAdmin);
+          } else {
+            setSelectedAdmin(loadedAdmins[0]);
+          }
+        } else if (loadedAdmins.length > 0) {
+          setSelectedAdmin(loadedAdmins[0]);
+        }
+
+        const roomParam = tg.roomIdFromParam || tg.groupIdFromParam || urlParams.get('room') || urlParams.get('group');
+        if (roomParam && loadedRooms.length > 0) {
+          const matchedRoom = loadedRooms.find(
+            (g) => g.slug === roomParam || g.id === roomParam
+          );
+          if (matchedRoom) {
+            setSelectedGroup(matchedRoom);
           }
         }
       } catch (err) {
-        console.warn('Could not fetch rooms from DB, using defaults:', err);
+        console.warn('Could not fetch rooms/admins from DB, using defaults:', err);
         setGroups(DEFAULT_ROOMS);
       }
     };
-    fetchGroups();
-  }, [userBalance]);
+    fetchRoomsAndAdmins();
+  }, []);
 
-  // Sync user balance for group gating
+  // Sync user balance scoped to selectedAdmin
   useEffect(() => {
     if (!appUser?.id) return;
     const loadUserBalance = async () => {
+      if (selectedAdmin?.id) {
+        const { data: wallet } = await supabase
+          .from('admin_user_wallets')
+          .select('deposited_balance, won_balance')
+          .eq('telegram_user_id', appUser.id)
+          .eq('admin_id', selectedAdmin.id)
+          .maybeSingle();
+
+        if (wallet) {
+          const total = (wallet.deposited_balance || 0) + (wallet.won_balance || 0);
+          setUserBalance(total);
+          return;
+        }
+      }
+
+      // Legacy fallback
       const { data } = await supabase
         .from('telegram_users')
         .select('balance, deposited_balance, won_balance')
@@ -182,26 +230,10 @@ function AppContent() {
       if (data) {
         const total = (data.deposited_balance || 0) + (data.won_balance || 0) || data.balance || 0;
         setUserBalance(total);
-
-        // Check if user came from a deep link for a specific group
-        const tg = initTelegram();
-        if (tg.groupIdFromParam && groups.length > 0) {
-          const matched = groups.find(
-            (g) => g.slug === tg.groupIdFromParam || g.id === tg.groupIdFromParam
-          );
-          if (matched) {
-            if (total >= matched.min_balance) {
-              setSelectedGroup(matched);
-            } else {
-              setInsufficientModalGroup(matched);
-              setSelectedGroup(null);
-            }
-          }
-        }
       }
     };
     loadUserBalance();
-  }, [appUser?.id, groups]);
+  }, [appUser?.id, selectedAdmin]);
 
   useEffect(() => {
     if (appUser || !isConnected || !address || walletRegistered.current) return;
@@ -290,12 +322,17 @@ function AppContent() {
         }
       }
 
-      const { data: playingGames } = await supabase
+      let query = supabase
         .from('games')
         .select('id')
         .eq('status', 'playing')
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .order('created_at', { ascending: false });
+
+      if (selectedGroup) {
+        query = query.or(`room_id.eq.${selectedGroup.id},room_slug.eq.${selectedGroup.slug || selectedGroup.id}`);
+      }
+
+      const { data: playingGames } = await query.limit(1);
 
       if (playingGames && playingGames.length > 0) {
         const activeGameId = playingGames[0].id;
@@ -355,7 +392,7 @@ function AppContent() {
       supabase.removeChannel(activeGameChannel);
       clearInterval(pollInterval);
     };
-  }, [appUser, gameId, gameStarted]);
+  }, [appUser, gameId, gameStarted, selectedGroup]);
 
   useEffect(() => {
     if (!playerId || !gameId) return;
@@ -417,20 +454,24 @@ function AppContent() {
         telegramFirstName: user.first_name,
         telegramLastName: user.last_name || null,
         cardLayout,
+        adminId: selectedAdmin?.id,
       }),
     });
 
     const result = await response.json();
 
     if (!response.ok) {
-      if (result.error === 'Insufficient balance') {
-        const { data: userData } = await supabase
-          .from('telegram_users')
-          .select('deposited_balance, won_balance')
-          .eq('telegram_user_id', user.id)
-          .maybeSingle();
+      if (result.error === 'Insufficient balance' || result.error_code === 'INSUFFICIENT_BALANCE') {
+        if (selectedAdmin?.id) {
+          const { data: walletData } = await supabase
+            .from('admin_user_wallets')
+            .select('deposited_balance, won_balance')
+            .eq('telegram_user_id', user.id)
+            .eq('admin_id', selectedAdmin.id)
+            .maybeSingle();
 
-        setUserBalance((userData?.deposited_balance || 0) + (userData?.won_balance || 0));
+          setUserBalance((walletData?.deposited_balance || 0) + (walletData?.won_balance || 0));
+        }
         setShowDepositModal(true);
       }
       throw new Error(result.error || 'Failed to join game');
@@ -448,48 +489,48 @@ function AppContent() {
 
   useEffect(() => {
     const checkAdminPath = () => {
-      if (window.location.pathname === '/admin') {
+      const path = window.location.pathname;
+      const urlParams = new URLSearchParams(window.location.search);
+      const isAdminQuery = urlParams.get('admin') === 'true' || urlParams.get('view') === 'admin';
+
+      if (path === '/admin' || path === '/admin/' || isAdminQuery) {
         setView('admin');
+      } else {
+        setView('lobby');
       }
     };
+
     checkAdminPath();
     window.addEventListener('popstate', checkAdminPath);
     return () => window.removeEventListener('popstate', checkAdminPath);
   }, []);
 
-  const handleReturnToLobby = useCallback(() => {
-    localStorage.removeItem('gameId');
-    localStorage.removeItem('playerId');
-    setGameId(null);
-    setPlayerId(null);
-    setGameStarted(false);
-  }, []);
-
   if (view === 'admin') {
     return (
-      <>
-        <Suspense fallback={<div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center"><div className="text-gray-600">Loading admin panel...</div></div>}>
-          <Admin />
-        </Suspense>
-        <NetworkQualityIndicator />
-      </>
+      <Suspense fallback={
+        <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+          <div className="text-white text-lg">Loading Admin Panel...</div>
+        </div>
+      }>
+        <Admin />
+      </Suspense>
     );
   }
 
-  if (gameId && gameStarted) {
+  if (view === 'game' && gameId) {
     return (
-      <>
-        <GameRoom gameId={gameId} playerId={playerId} onReturnToLobby={handleReturnToLobby} />
-        {appUser && (
-          <WalletDepositModal
-            isOpen={showDepositModal}
-            onClose={() => setShowDepositModal(false)}
-            telegramUserId={appUser.id}
-            onSuccess={() => setShowDepositModal(false)}
-          />
-        )}
-        <NetworkQualityIndicator />
-      </>
+      <GameRoom
+        gameId={gameId}
+        playerId={playerId || ''}
+        isSpectator={!playerId}
+        onLeave={() => {
+          setGameId(null);
+          setPlayerId(null);
+          setGameStarted(false);
+          setView('lobby');
+        }}
+        telegramUser={appUser}
+      />
     );
   }
 
@@ -498,6 +539,9 @@ function AppContent() {
       <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between">
         <GroupSelector
           groups={groups}
+          admins={admins}
+          selectedAdmin={selectedAdmin}
+          onSelectAdmin={(admin) => setSelectedAdmin(admin)}
           userBalance={userBalance}
           onSelectGroup={(group) => setSelectedGroup(group)}
           onOpenDepositGuide={(group) => setInsufficientModalGroup(group)}
@@ -526,7 +570,7 @@ function AppContent() {
               <div className="pt-2 flex flex-col gap-2">
                 <button
                   onClick={() => {
-                    const target = insufficientModalGroup.admin_username || 'parcelic';
+                    const target = selectedAdmin?.telegram_username || insufficientModalGroup.admin_username || 'parcelic';
                     const clean = target.replace(/^@/, '');
                     const url = `https://t.me/${clean}`;
                     if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.openTelegramLink) {
@@ -539,7 +583,7 @@ function AppContent() {
                   }}
                   className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-center flex items-center justify-center gap-2 shadow-lg text-sm active:scale-95 transition-all"
                 >
-                  <span>Contact Admin (@{insufficientModalGroup.admin_username || 'parcelic'})</span>
+                  <span>Contact Admin (@{selectedAdmin?.telegram_username?.replace(/^@/, '') || 'parcelic'})</span>
                   <ExternalLink className="w-4 h-4" />
                 </button>
                 <button
@@ -559,23 +603,14 @@ function AppContent() {
 
   return (
     <>
-      {selectedGroup && (
-        <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center justify-between text-xs text-gray-300 sticky top-0 z-30 shadow-md">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="font-bold text-amber-400">{selectedGroup.name}</span>
-            <span className="text-slate-400">({selectedGroup.stake_amount} ETB)</span>
-          </div>
-          <button
-            onClick={() => setSelectedGroup(null)}
-            className="flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg transition-colors font-medium text-[11px]"
-          >
-            <ArrowLeft className="w-3 h-3" />
-            <span>Switch Room</span>
-          </button>
-        </div>
-      )}
-      <Lobby onJoinGame={handleJoinGame} onSpectateGame={handleSpectateGame} telegramUser={appUser} />
+      <Lobby
+        onJoinGame={handleJoinGame}
+        onSpectateGame={handleSpectateGame}
+        telegramUser={appUser}
+        selectedGroup={selectedGroup}
+        selectedAdmin={selectedAdmin}
+        onSwitchRoom={() => setSelectedGroup(null)}
+      />
       {appUser && (
         <WalletDepositModal
           isOpen={showDepositModal}

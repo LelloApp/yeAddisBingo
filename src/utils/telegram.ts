@@ -11,8 +11,10 @@ export interface TelegramUser {
 
 export interface TelegramAppInit {
   user: TelegramUser | null;
-  startParam: string | null; // e.g. 'group_vip_club'
-  groupIdFromParam: string | null; // extracted group slug or ID
+  startParam: string | null;
+  groupIdFromParam: string | null;
+  roomIdFromParam: string | null;
+  adminIdFromParam: string | null;
   isAvailable: boolean;
   platform: string;
 }
@@ -22,6 +24,8 @@ export function initTelegramApp(): TelegramAppInit {
   let startParam: string | null = null;
   let isAvailable = false;
   let platform = 'unknown';
+  let adminIdFromParam: string | null = null;
+  let roomIdFromParam: string | null = null;
 
   if (typeof window !== 'undefined') {
     try {
@@ -53,28 +57,36 @@ export function initTelegramApp(): TelegramAppInit {
         }
       }
 
-      // 2. Fallback check: URL query parameters (?tgWebAppStartParam=... or ?startapp=... or ?group=...)
+      // 2. Fallback check: URL query parameters (?tgWebAppStartParam=... or ?startapp=... or ?room=... or ?admin=...)
       const urlParams = new URLSearchParams(window.location.search);
       if (!startParam) {
-        startParam = urlParams.get('tgWebAppStartParam') || urlParams.get('startapp') || urlParams.get('group');
+        startParam = urlParams.get('tgWebAppStartParam') || urlParams.get('startapp') || urlParams.get('room') || urlParams.get('group');
       }
+      roomIdFromParam = urlParams.get('room') || urlParams.get('group');
+      adminIdFromParam = urlParams.get('admin');
 
       // 3. Fallback check: URL hash fragment
-      if (!startParam && window.location.hash) {
+      if (window.location.hash) {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        startParam = hashParams.get('tgWebAppStartParam') || hashParams.get('startapp');
+        if (!startParam) {
+          startParam = hashParams.get('tgWebAppStartParam') || hashParams.get('startapp');
+        }
+        if (!roomIdFromParam) roomIdFromParam = hashParams.get('room') || hashParams.get('group');
+        if (!adminIdFromParam) adminIdFromParam = hashParams.get('admin');
       }
     } catch (e) {
       console.error('Error initializing Telegram WebApp SDK:', e);
     }
   }
 
-  // Parse group slug if format is 'group_<slug>'
-  let groupIdFromParam: string | null = null;
+  // Parse group/room slug if format is 'group_<slug>' or 'room_<slug>'
+  let groupIdFromParam: string | null = roomIdFromParam;
   if (startParam) {
     if (startParam.startsWith('group_')) {
       groupIdFromParam = startParam.replace('group_', '');
-    } else {
+    } else if (startParam.startsWith('room_')) {
+      groupIdFromParam = startParam.replace('room_', '');
+    } else if (!groupIdFromParam) {
       groupIdFromParam = startParam;
     }
   }
@@ -83,6 +95,8 @@ export function initTelegramApp(): TelegramAppInit {
     user,
     startParam,
     groupIdFromParam,
+    roomIdFromParam: groupIdFromParam,
+    adminIdFromParam,
     isAvailable,
     platform,
   };

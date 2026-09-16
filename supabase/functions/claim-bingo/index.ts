@@ -51,15 +51,21 @@ Deno.serve(async (req: Request) => {
     if (result.isFirstClaim) {
       setTimeout(async () => {
         try {
-          const { data: game } = await supabase
+          const targetGameId = result.gameId || result.game_id;
+          let query = supabase
             .from('games')
-            .select('id, status, winner_ids, winner_prize, claim_window_start')
+            .select('id, status, winner_ids, winner_prize, claim_window_start, room_id')
             .eq('status', 'playing')
-            .not('claim_window_start', 'is', null)
-            .maybeSingle();
+            .not('claim_window_start', 'is', null);
+
+          if (targetGameId) {
+            query = query.eq('id', targetGameId);
+          }
+
+          const { data: game } = await query.maybeSingle();
 
           if (game) {
-            const claimStart = new Date(game.claim_window_start).getTime();
+            const claimStart = game.claim_window_start ? new Date(game.claim_window_start).getTime() : 0;
             const now = Date.now();
             if (now - claimStart >= CLAIM_WINDOW_MS) {
               const finalWinnerCount = game.winner_ids?.length || 1;
@@ -78,6 +84,15 @@ Deno.serve(async (req: Request) => {
                 })
                 .eq('id', game.id)
                 .eq('status', 'playing');
+
+              // Automatically ensure the next waiting game for this room
+              try {
+                await supabase.rpc('ensure_room_waiting_game', {
+                  p_room_id: game.room_id || 'starter_room'
+                });
+              } catch (ensureErr) {
+                console.warn('Could not auto-ensure waiting game:', ensureErr);
+              }
             }
           }
         } catch (err) {
@@ -93,7 +108,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error('Error:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
