@@ -4,8 +4,8 @@ import { BingoCard } from './BingoCard';
 import { getBingoLetter } from '../utils/bingoUtils';
 import { Trophy, Eye, Volume2, VolumeX } from 'lucide-react';
 import { useConnectionManager } from '../hooks/useConnectionManager';
+import { soundAnnouncer } from '../utils/soundAnnouncer';
 import { formatBnb } from '../utils/formatBalance';
-import { soundAnnouncer, getAmharicLetter, numberToAmharicWord } from '../utils/soundAnnouncer';
 
 interface GameRoomProps {
   gameId: string;
@@ -705,9 +705,8 @@ export function GameRoom({ gameId, playerId, onReturnToLobby }: GameRoomProps) {
                   {game.current_number && (
                     <div className={`rounded-lg p-1.5 sm:p-2 flex items-center justify-between gap-2 sm:gap-3 ${isDarkMode ? 'bg-blue-600' : 'bg-blue-700'}`}>
                       <div className="text-xs sm:text-sm lg:text-base font-bold">Current Call</div>
-                      <div className="bg-orange-500 text-white rounded-full px-2.5 sm:px-3 lg:px-4 py-1 sm:py-1.5 text-base sm:text-lg lg:text-xl font-bold flex items-center gap-1.5 shadow-md">
+                      <div className="bg-orange-500 text-white rounded-full px-3 sm:px-4 py-1 sm:py-1.5 text-base sm:text-lg lg:text-xl font-black flex items-center shadow-md">
                         <span>{getBingoLetter(game.current_number)}-{game.current_number}</span>
-                        <span className="text-xs font-ethiopic opacity-90">({getAmharicLetter(game.current_number)}-{numberToAmharicWord(game.current_number)})</span>
                       </div>
                       <button
                         onClick={() => setIsAudioMuted(soundAnnouncer.toggleMute())}
@@ -723,7 +722,7 @@ export function GameRoom({ gameId, playerId, onReturnToLobby }: GameRoomProps) {
                   <div className="text-center pb-1">
                     <div className={`text-[10px] sm:text-xs lg:text-sm mb-1.5 font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>Recent Calls</div>
                     <div className="flex justify-center gap-2 sm:gap-3 flex-wrap">
-                      {game.called_numbers.slice(-3).map((num, idx) => {
+                      {game.called_numbers.slice(-4).map((num, idx) => {
                         const colors = getBingoColumnColor(num);
                         return (
                           <div

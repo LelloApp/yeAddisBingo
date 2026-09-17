@@ -4,16 +4,14 @@ import { supabase, Game, Admin } from '../lib/supabase';
 import { TelegramUser } from '../utils/telegram';
 import { ToastContainer, ToastData } from './ToastContainer';
 import { getCachedLayouts, setCachedLayouts } from '../utils/cardLayoutCache';
-import WalletConnect from './WalletConnect';
 import { WalletDepositModal } from './WalletDepositModal';
 import { BnbWithdrawalModal } from './BnbWithdrawalModal';
-import { Sun, Moon, Wallet, Timer, Hash, Trophy, Coins, ShieldCheck, ArrowLeft } from 'lucide-react';
-import { formatBnb } from '../utils/formatBalance';
+import { Sun, Moon, Wallet, Timer, Hash, Coins, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { BingoGroup } from './GroupSelector';
 
 interface LobbyProps {
   onJoinGame: (gameId: string, selectedNumber: number, telegramUser: TelegramUser, cardLayout?: number[][]) => void;
-  onSpectateGame: (gameId: string) => void;
+  onSpectateGame?: (gameId: string) => void;
   telegramUser: TelegramUser | null;
   selectedGroup?: BingoGroup | null;
   selectedAdmin?: Admin | null;
@@ -38,24 +36,23 @@ interface PlayerInfo {
   id: string;
 }
 
-export function Lobby({ onJoinGame, onSpectateGame, telegramUser, selectedGroup, selectedAdmin, onSwitchRoom }: LobbyProps) {
-  const { address: walletAddress, isConnected: isWalletConnected } = useAccount();
+export function Lobby({ onJoinGame, onSpectateGame: _onSpectateGame, telegramUser, selectedGroup, selectedAdmin, onSwitchRoom }: LobbyProps) {
+  const { address: walletAddress } = useAccount();
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
   const [previewCard, setPreviewCard] = useState<number[][] | null>(null);
   const [activeGame, setActiveGame] = useState<Game | null>(null);
   const [takenNumbers, setTakenNumbers] = useState<number[]>([]);
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const [countdown, setCountdown] = useState<number>(0);
-  const [isJoining, setIsJoining] = useState(false);
   const [registeredUser, setRegisteredUser] = useState<RegisteredUser | null>(null);
-  const [isCheckingRegistration, setIsCheckingRegistration] = useState(true);
+  const [, setIsCheckingRegistration] = useState(true);
   const [balanceChanged, setBalanceChanged] = useState(false);
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [optimisticSelection, setOptimisticSelection] = useState<number | null>(null);
   const [processingNumbers, setProcessingNumbers] = useState<Set<number>>(new Set());
   const [timeOffset, setTimeOffset] = useState<number>(0);
-  const [isTimeSynced, setIsTimeSynced] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [, setIsTimeSynced] = useState(false);
+  const [, setIsLoadingData] = useState(true);
   const [cardLayoutCache, setCardLayoutCache] = useState<Map<number, number[][]>>(new Map());
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isWalletDepositModalOpen, setIsWalletDepositModalOpen] = useState(false);
@@ -419,13 +416,13 @@ export function Lobby({ onJoinGame, onSpectateGame, telegramUser, selectedGroup,
         .select('id')
         .eq('game_id', activeGame.id);
 
-      if (players && players.length > 0) {
+      if (players && players.length >= 2) {
         await startGame();
       } else {
         const { data: serverTime } = await supabase.rpc('get_server_timestamp_ms');
 
         if (serverTime) {
-          const newStartTimeMs = serverTime + 25000;
+          const newStartTimeMs = serverTime + 30000;
           const newStartTime = new Date(newStartTimeMs).toISOString();
           const newSelectionClosedAt = new Date(newStartTimeMs - 5000).toISOString();
 

@@ -1,3 +1,4 @@
+/// <reference path="../deno.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -424,7 +425,7 @@ Deno.serve(async (req: Request) => {
                   { text: "🎟️ 10 Tokens (50 ETB)", callback_data: "lotto_buy:50" }
                 ],
                 [
-                  { text: "🎮 Open Game App", web_app: { url: webAppUrl } }
+                  { text: "🎮 Open Game App", web_app: { url: appUrl } }
                 ]
               ]
             }
@@ -442,7 +443,7 @@ Deno.serve(async (req: Request) => {
         const { data: userWallet } = await supabaseClient
           .from("admin_user_wallets")
           .select("admin_id, deposited_balance, won_balance")
-          .eq("telegram_user_id", from.id)
+          .eq("telegram_user_id", user.id)
           .order("updated_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -450,7 +451,7 @@ Deno.serve(async (req: Request) => {
         const adminId = userWallet?.admin_id || null;
 
         const { data: buyRes, error: buyErr } = await supabaseClient.rpc("buy_daily_lotto_tokens", {
-          p_telegram_user_id: from.id,
+          p_telegram_user_id: user.id,
           p_admin_id: adminId,
           p_stake_amount: stakeAmount,
         });
@@ -698,7 +699,7 @@ Deno.serve(async (req: Request) => {
 
     const message = update.message;
     const chatId = message.chat.id;
-    const text = message.text.trim();
+    const text = (message.text || "").trim();
     const user = message.from;
 
     // Command: /start or /register

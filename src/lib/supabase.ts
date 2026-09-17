@@ -125,3 +125,42 @@ export interface DailyLottoTicket {
   created_at: string;
 }
 
+export interface BonusGame {
+  id: string;
+  telegram_user_id: number;
+  target_room_slug: string;
+  target_stake: number;
+  remaining_plays: number;
+  source_game_id?: string;
+  source_room_slug?: string;
+  created_at: string;
+}
+
+export interface PeriodWinner {
+  id: string;
+  period_date: string;
+  period_number: number;
+  room_id: string;
+  room_slug?: string;
+  room_stake: number;
+  game_id?: string;
+  telegram_user_id: number;
+  admin_id?: string;
+  prize_amount: number;
+  created_at: string;
+}
+
+export interface DailySuperBonus {
+  id: string;
+  draw_date: string;
+  room_slug: string;
+  room_stake: number;
+  winner_telegram_user_id?: number;
+  winner_admin_id?: string;
+  super_bonus_amount: number;
+  winning_period_number?: number;
+  highest_stake: number;
+  status: 'pending' | 'drawn' | 'credited';
+  drawn_at?: string;
+}
+

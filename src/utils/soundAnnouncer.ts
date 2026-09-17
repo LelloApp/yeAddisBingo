@@ -60,88 +60,126 @@ class SoundAnnouncerEngine {
   constructor() {
     if (typeof window !== 'undefined') {
       this.isMuted = localStorage.getItem('bingo_audio_muted') === 'true';
+
+      // Auto-unlock Web Audio API on first user interaction anywhere
+      const unlockAudio = () => {
+        const ctx = this.getAudioContext();
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume();
+        }
+        window.removeEventListener('click', unlockAudio);
+        window.removeEventListener('touchstart', unlockAudio);
+        window.removeEventListener('keydown', unlockAudio);
+      };
+      window.addEventListener('click', unlockAudio, { passive: true });
+      window.addEventListener('touchstart', unlockAudio, { passive: true });
+      window.addEventListener('keydown', unlockAudio, { passive: true });
     }
   }
 
   private getAudioContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
-    if (!this.audioCtx) {
-      const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtxClass) {
-        this.audioCtx = new AudioCtxClass();
+    try {
+      if (!this.audioCtx) {
+        const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtxClass) {
+          this.audioCtx = new AudioCtxClass();
+        }
       }
+      if (this.audioCtx && this.audioCtx.state === 'suspended') {
+        this.audioCtx.resume();
+      }
+      return this.audioCtx;
+    } catch {
+      return null;
     }
-    if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume();
-    }
-    return this.audioCtx;
   }
 
-  // Play a soft digital chime when a number appears
-  public playChime(frequency = 587.33, duration = 0.25) {
+  // Play a crisp, pleasant dual-tone chime when a number appears
+  public playChime(frequency = 587.33, duration = 0.35) {
     if (this.isMuted) return;
     try {
       const ctx = this.getAudioContext();
       if (!ctx) return;
 
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
 
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(frequency, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(frequency * 1.5, ctx.currentTime + duration);
+      // First bell harmonic
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(frequency, ctx.currentTime);
+      osc1.frequency.exponentialRampToValueAtTime(frequency * 1.33, ctx.currentTime + duration);
 
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      gain1.gain.setValueAtTime(0.28, ctx.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
 
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start();
+      osc1.stop(ctx.currentTime + duration);
 
-      osc.start();
-      osc.stop(ctx.currentTime + duration);
-    } catch {
-      // Audio context might be restricted before user interaction
+      // Second harmonic overtone for clarity
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(frequency * 1.5, ctx.currentTime);
+
+      gain2.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start();
+      osc2.stop(ctx.currentTime + duration);
+    } catch (err) {
+      console.warn('Audio chime playback error:', err);
     }
   }
 
-  // Celebration fan-fare sound for Bingo winner
+  // Celebration fanfare sound for Bingo winner
   public playWinFanfare() {
     if (this.isMuted) return;
-    const notes = [523.25, 659.25, 783.99, 1046.5]; // C - E - G - High C
+    const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5]; // C - E - G - High C - High E
     notes.forEach((freq, idx) => {
       setTimeout(() => {
-        this.playChime(freq, 0.4);
-      }, idx * 160);
+        this.playChime(freq, 0.45);
+      }, idx * 140);
     });
   }
 
-  // Announce the number using Speech Synthesis in Amharic
+  // Announce the number using chime + speech synthesis
   public announceNumber(num: number) {
-    if (this.isMuted || typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (this.isMuted) return;
 
+    // 1. ALWAYS play the energetic bell chime first
     this.playChime();
 
-    const letter = getAmharicLetter(num);
-    const amharicNumber = numberToAmharicWord(num);
-    const spokenText = `${letter}, ${amharicNumber}`; // e.g. "ቢ, አስራ አምስት"
+    // 2. Vocal pronunciation if speech synthesis is available
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        const letter = getAmharicLetter(num);
+        const amharicNumber = numberToAmharicWord(num);
+        const spokenText = `${letter}, ${amharicNumber}`;
 
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(spokenText);
-      utterance.rate = 0.95; // Slightly measured rate for clear bingo call
-      utterance.pitch = 1.05;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(spokenText);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.05;
 
-      // Try finding an Amharic or English voice
-      const voices = window.speechSynthesis.getVoices();
-      const amVoice = voices.find((v) => v.lang.startsWith('am') || v.lang.includes('ETH'));
-      if (amVoice) {
-        utterance.voice = amVoice;
-        utterance.lang = 'am-ET';
+        const voices = window.speechSynthesis.getVoices();
+        const amVoice = voices.find((v) => v.lang.startsWith('am') || v.lang.includes('ETH'));
+        if (amVoice) {
+          utterance.voice = amVoice;
+          utterance.lang = 'am-ET';
+        }
+
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        // Speech synthesis is non-blocking fallback
       }
-
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
-      console.warn('Speech synthesis error:', e);
     }
   }
 

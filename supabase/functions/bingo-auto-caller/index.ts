@@ -1,3 +1,4 @@
+/// <reference path="../deno.d.ts" />
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 
 const corsHeaders = {
@@ -19,6 +20,41 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // 1. Process waiting games whose countdown reached starts_at
+    const nowIso = new Date().toISOString();
+    const { data: waitingGames } = await supabase
+      .from('games')
+      .select('id, starts_at, room_id')
+      .eq('status', 'waiting')
+      .lte('starts_at', nowIso);
+
+    if (waitingGames && waitingGames.length > 0) {
+      for (const wg of waitingGames) {
+        // Minimal DB read: HEAD count only
+        const { count } = await supabase
+          .from('players')
+          .select('*', { count: 'exact', head: true })
+          .eq('game_id', wg.id);
+
+        if ((count || 0) >= 2) {
+          await supabase
+            .from('games')
+            .update({ status: 'playing', started_at: new Date().toISOString() })
+            .eq('id', wg.id)
+            .eq('status', 'waiting');
+        } else {
+          // Extend starts_at by 30 seconds to allow another player to join
+          const newStartsAt = new Date(Date.now() + 30000).toISOString();
+          await supabase
+            .from('games')
+            .update({ starts_at: newStartsAt })
+            .eq('id', wg.id)
+            .eq('status', 'waiting');
+        }
+      }
+    }
+
+    // 2. Process active playing games
     const { data: activeGames } = await supabase
       .from('games')
       .select('*')
@@ -26,7 +62,7 @@ Deno.serve(async (req: Request) => {
 
     if (!activeGames || activeGames.length === 0) {
       return new Response(
-        JSON.stringify({ message: 'No active games' }),
+        JSON.stringify({ message: 'No active playing games', checkedWaiting: waitingGames?.length || 0 }),
         {
           headers: {
             ...corsHeaders,
@@ -62,6 +98,14 @@ Deno.serve(async (req: Request) => {
             return_to_lobby_at: returnToLobbyAt.toISOString()
           })
           .eq('id', game.id);
+
+        if (!game.winner_ids || game.winner_ids.length === 0) {
+          try {
+            await supabase.rpc('refund_unclaimed_game', { p_game_id: game.id });
+          } catch {
+            // Ignore RPC error
+          }
+        }
 
         try {
           await supabase.rpc('ensure_room_waiting_game', {

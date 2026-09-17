@@ -29,13 +29,6 @@ ON CONFLICT (id) DO UPDATE SET
   sort_order = EXCLUDED.sort_order;
 
 DELETE FROM games_catalog WHERE id = 'chez';
-ON CONFLICT (id) DO UPDATE SET
-  title = EXCLUDED.title,
-  subtitle = EXCLUDED.subtitle,
-  description = EXCLUDED.description,
-  badge = EXCLUDED.badge,
-  status = EXCLUDED.status,
-  sort_order = EXCLUDED.sort_order;
 
 -- 2. Bingo Room Sections (The 6 Rooms: 5, 10, 15, 20, 50, 100 ETB)
 CREATE TABLE IF NOT EXISTS bingo_rooms (
@@ -213,7 +206,6 @@ DECLARE
   v_game_number integer;
   v_starts_at timestamptz;
   v_selection_closed_at timestamptz;
-  v_code text;
 BEGIN
   -- Lookup room details
   SELECT * INTO v_room FROM bingo_rooms WHERE id = p_room_id OR slug = p_room_id LIMIT 1;
@@ -245,16 +237,12 @@ BEGIN
   -- Generate next game number
   SELECT COALESCE(MAX(game_number), 0) + 1 INTO v_game_number FROM games;
 
-  -- Generate random 6-character code
-  v_code := upper(substring(md5(random()::text || clock_timestamp()::text) from 1 for 6));
-
   -- Calculate countdown timings
   v_starts_at := now() + (p_seconds * interval '1 second');
   v_selection_closed_at := now() + ((p_seconds - 10) * interval '1 second');
 
   -- Insert new waiting game for this room
   INSERT INTO games (
-    code,
     status,
     stake_amount,
     room_id,
@@ -268,7 +256,6 @@ BEGIN
     winners_paid,
     winner_prize
   ) VALUES (
-    v_code,
     'waiting',
     v_room.stake_amount,
     v_room.id,
@@ -689,35 +676,83 @@ BEGIN
       WHERE p.id = v_winner_id_val;
 
       IF FOUND THEN
-        -- Credit won_balance to winner under their selected admin
-        IF v_winner_rec.admin_id IS NOT NULL THEN
-          UPDATE admin_user_wallets
+        -- Cashflow Protection & Liquidity Rule:
+        -- If players < 12: Prize credited to DEPOSITED_BALANCE (playable, prevents cashout loops)
+        -- If players >= 12: Prize credited to WON_BALANCE (withdrawable cash win)
+        IF v_players_count < 12 THEN
+          IF v_winner_rec.admin_id IS NOT NULL THEN
+            UPDATE admin_user_wallets
+            SET
+              deposited_balance = deposited_balance + v_prize_amount,
+              total_won = total_won + v_prize_amount,
+              win_count = win_count + 1,
+              updated_at = now()
+            WHERE admin_id = v_winner_rec.admin_id
+              AND telegram_user_id = v_winner_rec.telegram_user_id;
+
+            INSERT INTO admin_ledger_transactions (
+              admin_id,
+              telegram_user_id,
+              game_id,
+              type,
+              amount,
+              description
+            ) VALUES (
+              v_winner_rec.admin_id,
+              v_winner_rec.telegram_user_id,
+              NEW.id,
+              'deposit_credited',
+              v_prize_amount,
+              format('BINGO Win (%s ETB) in Game %s [<12 players: Credited to Playable Balance]', v_prize_amount, NEW.id)
+            );
+          END IF;
+
+          UPDATE telegram_users
+          SET
+            deposited_balance = deposited_balance + v_prize_amount,
+            balance = balance + v_prize_amount,
+            total_won = total_won + v_prize_amount,
+            win_count = win_count + 1
+          WHERE telegram_user_id = v_winner_rec.telegram_user_id;
+
+        ELSE
+          IF v_winner_rec.admin_id IS NOT NULL THEN
+            UPDATE admin_user_wallets
+            SET
+              won_balance = won_balance + v_prize_amount,
+              total_won = total_won + v_prize_amount,
+              win_count = win_count + 1,
+              updated_at = now()
+            WHERE admin_id = v_winner_rec.admin_id
+              AND telegram_user_id = v_winner_rec.telegram_user_id;
+
+            INSERT INTO admin_ledger_transactions (
+              admin_id,
+              telegram_user_id,
+              game_id,
+              type,
+              amount,
+              description
+            ) VALUES (
+              v_winner_rec.admin_id,
+              v_winner_rec.telegram_user_id,
+              NEW.id,
+              'win_credited',
+              v_prize_amount,
+              format('BINGO Cashable Win (%s ETB) in Game %s [12+ players Tournament]', v_prize_amount, NEW.id)
+            );
+          END IF;
+
+          UPDATE telegram_users
           SET
             won_balance = won_balance + v_prize_amount,
+            balance = balance + v_prize_amount,
             total_won = total_won + v_prize_amount,
-            win_count = win_count + 1,
-            updated_at = now()
-          WHERE admin_id = v_winner_rec.admin_id
-            AND telegram_user_id = v_winner_rec.telegram_user_id;
+            win_count = win_count + 1
+          WHERE telegram_user_id = v_winner_rec.telegram_user_id;
+        END IF;
 
-          -- Record win in admin ledger
-          INSERT INTO admin_ledger_transactions (
-            admin_id,
-            telegram_user_id,
-            game_id,
-            type,
-            amount,
-            description
-          ) VALUES (
-            v_winner_rec.admin_id,
-            v_winner_rec.telegram_user_id,
-            NEW.id,
-            'win_credited',
-            v_prize_amount,
-            format('BINGO Win Prize (%s ETB) in Game %s (Players: %s)', v_prize_amount, NEW.id, v_players_count)
-          );
-
-          -- Award 10% commission ONLY to the winning player's admin when 5+ players
+        -- Award 10% commission ONLY to the winning player's admin when 5+ players
           IF v_players_count >= 5 AND v_commission_per_winner > 0 THEN
             UPDATE admins
             SET
@@ -764,16 +799,62 @@ BEGIN
               format('10%% Winner Admin Commission for Game %s (Winner: %s, Pot: %s ETB)', NEW.id, v_winner_rec.telegram_user_id, v_total_pot)
             );
           END IF;
-        END IF;
 
-        -- Keep telegram_users legacy columns in sync
-        UPDATE telegram_users
-        SET
-          won_balance = won_balance + v_prize_amount,
-          balance = balance + v_prize_amount,
-          total_won = total_won + v_prize_amount,
-          win_count = win_count + 1
-        WHERE telegram_user_id = v_winner_rec.telegram_user_id;
+        -- Award Bonus Gift Token for the next higher section
+        -- 5 ETB -> 10 ETB, 10 -> 15, 15 -> 20, 20 -> 50, 50 -> 100, 100 -> 100 (2 plays)
+        DECLARE
+          v_src_stake integer := COALESCE(NEW.stake_amount, 10);
+          v_bonus_target_slug text;
+          v_bonus_target_stake integer;
+          v_bonus_plays integer := 1;
+        BEGIN
+          IF v_src_stake <= 5 THEN
+            v_bonus_target_slug := 'starter_room'; v_bonus_target_stake := 10;
+          ELSIF v_src_stake <= 10 THEN
+            v_bonus_target_slug := 'standard_room'; v_bonus_target_stake := 15;
+          ELSIF v_src_stake <= 15 THEN
+            v_bonus_target_slug := 'addis_classic'; v_bonus_target_stake := 20;
+          ELSIF v_src_stake <= 20 THEN
+            v_bonus_target_slug := 'vip_diamond'; v_bonus_target_stake := 50;
+          ELSIF v_src_stake <= 50 THEN
+            v_bonus_target_slug := 'high_roller'; v_bonus_target_stake := 100;
+          ELSE
+            v_bonus_target_slug := 'high_roller'; v_bonus_target_stake := 100; v_bonus_plays := 2;
+          END IF;
+
+          INSERT INTO bonus_games (
+            telegram_user_id,
+            target_room_slug,
+            target_stake,
+            remaining_plays,
+            source_game_id,
+            source_room_slug
+          ) VALUES (
+            v_winner_rec.telegram_user_id,
+            v_bonus_target_slug,
+            v_bonus_target_stake,
+            v_bonus_plays,
+            NEW.id,
+            COALESCE(NEW.room_slug, NEW.room_id)
+          );
+        EXCEPTION WHEN OTHERS THEN
+          NULL; -- Prevent blocking payout if bonus table is pending
+        END;
+
+        -- Record winner in period_winners for Daily Super Bonus
+        BEGIN
+          PERFORM record_period_winner(
+            NEW.id,
+            COALESCE(NEW.room_id, 'starter_room'),
+            COALESCE(NEW.room_slug, 'starter_room'),
+            COALESCE(NEW.stake_amount, 10),
+            v_winner_rec.telegram_user_id,
+            v_winner_rec.admin_id,
+            v_prize_amount
+          );
+        EXCEPTION WHEN OTHERS THEN
+          NULL;
+        END;
       END IF;
     END LOOP;
 
@@ -1356,5 +1437,362 @@ BEGIN
     'admin_commission', v_admin_commission,
     'unique_players', v_unique_players
   );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- 17. Bonus / Free Games Gift Token Engine
+-- When a user wins Bingo, they automatically receive a gift token to play the next higher tier section.
+-- Section progression: 5 ETB -> 10 ETB -> 15 ETB -> 20 ETB -> 50 ETB -> 100 ETB.
+-- If user wins in 100 ETB, they receive 2 gift tokens to play the 100 ETB section again.
+-- Restriction: Gift tokens can ONLY be used when the game session has >= 12 players.
+CREATE TABLE IF NOT EXISTS bonus_games (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  telegram_user_id bigint NOT NULL,
+  target_room_slug text NOT NULL,
+  target_stake integer NOT NULL,
+  remaining_plays integer NOT NULL DEFAULT 1 CHECK (remaining_plays >= 0),
+  source_game_id uuid REFERENCES games(id),
+  source_room_slug text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonus_games_user ON bonus_games(telegram_user_id);
+CREATE INDEX IF NOT EXISTS idx_bonus_games_user_room ON bonus_games(telegram_user_id, target_room_slug);
+
+-- RPC to claim / use a bonus game token for a round (requires >= 12 players in room)
+CREATE OR REPLACE FUNCTION use_bonus_game_token(
+  p_telegram_user_id bigint,
+  p_target_room_slug text,
+  p_game_id uuid
+)
+RETURNS jsonb AS $$
+DECLARE
+  v_bonus RECORD;
+  v_players_count integer;
+BEGIN
+  -- Check player count in the target game (must be >= 12 players to use bonus token)
+  SELECT COUNT(*) INTO v_players_count
+  FROM players
+  WHERE game_id = p_game_id;
+
+  IF v_players_count < 12 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Bonus gift tokens can only be used in sessions with 12 or more players (Current: ' || v_players_count || ' players)'
+    );
+  END IF;
+
+  -- Find available bonus game token
+  SELECT * INTO v_bonus
+  FROM bonus_games
+  WHERE telegram_user_id = p_telegram_user_id
+    AND target_room_slug = p_target_room_slug
+    AND remaining_plays > 0
+  ORDER BY created_at ASC
+  LIMIT 1
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'No bonus gift token available for this room');
+  END IF;
+
+  -- Deduct one play
+  UPDATE bonus_games
+  SET remaining_plays = remaining_plays - 1, updated_at = now()
+  WHERE id = v_bonus.id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'bonus_id', v_bonus.id,
+    'target_stake', v_bonus.target_stake,
+    'remaining_plays', v_bonus.remaining_plays - 1
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 18. 24 Hourly Periods (GMT+3 Addis Ababa) & Daily Super Bonus System
+-- Timezone: GMT+3 (East Africa Time).
+-- Period 1 is 00:00 - 00:59 EAT, Period 24 is 23:00 - 23:59 EAT.
+-- Up to 10 continuous games per period with 30s intervals.
+-- Daily Super Bonus Qualification Criteria:
+-- 1. At least 24 games finished on that day.
+-- 2. At least 10 distinct winning candidates (each user represented only once).
+-- Super Bonus Tiers: 5 ETB -> 500 ETB, 10 -> 1000, 15 -> 1500, 20 -> 2000, 50 -> 5000, 100 -> 10000.
+-- Credited directly to deposited_balance to maintain gameplay liquidity.
+CREATE TABLE IF NOT EXISTS period_winners (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  period_date date NOT NULL DEFAULT DATE(now() AT TIME ZONE 'UTC' + interval '3 hours'),
+  period_number integer NOT NULL CHECK (period_number BETWEEN 1 AND 24),
+  room_id text NOT NULL,
+  room_slug text,
+  room_stake integer NOT NULL DEFAULT 10,
+  game_id uuid REFERENCES games(id),
+  telegram_user_id bigint NOT NULL,
+  admin_id uuid REFERENCES admins(id),
+  prize_amount integer NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_period_winners_date ON period_winners(period_date, period_number);
+CREATE INDEX IF NOT EXISTS idx_period_winners_user ON period_winners(telegram_user_id);
+
+CREATE TABLE IF NOT EXISTS daily_super_bonuses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  draw_date date UNIQUE NOT NULL DEFAULT DATE(now() AT TIME ZONE 'UTC' + interval '3 hours'),
+  winner_telegram_user_id bigint,
+  winner_admin_id uuid REFERENCES admins(id),
+  super_bonus_amount integer NOT NULL DEFAULT 500,
+  winning_period_number integer,
+  highest_stake integer NOT NULL DEFAULT 10,
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'drawn', 'credited')),
+  drawn_at timestamptz,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Function to record period winner (GMT+3 EAT)
+CREATE OR REPLACE FUNCTION record_period_winner(
+  p_game_id uuid,
+  p_room_id text,
+  p_room_slug text,
+  p_room_stake integer,
+  p_telegram_user_id bigint,
+  p_admin_id uuid,
+  p_prize integer
+)
+RETURNS void AS $$
+DECLARE
+  v_eat_now timestamptz;
+  v_current_hour integer;
+  v_period_number integer;
+  v_period_date date;
+BEGIN
+  -- Convert to GMT+3 (East Africa Time)
+  v_eat_now := now() AT TIME ZONE 'UTC' + interval '3 hours';
+  v_current_hour := EXTRACT(HOUR FROM v_eat_now)::integer;
+  v_period_number := v_current_hour + 1; -- 1 to 24
+  v_period_date := DATE(v_eat_now);
+
+  INSERT INTO period_winners (
+    period_date,
+    period_number,
+    room_id,
+    room_slug,
+    room_stake,
+    game_id,
+    telegram_user_id,
+    admin_id,
+    prize_amount
+  ) VALUES (
+    v_period_date,
+    v_period_number,
+    p_room_id,
+    p_room_slug,
+    COALESCE(p_room_stake, 10),
+    p_game_id,
+    p_telegram_user_id,
+    p_admin_id,
+    p_prize
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to draw the Daily Super Bonus with GMT+3, >=24 games, and >=10 distinct candidates criteria
+CREATE OR REPLACE FUNCTION draw_daily_super_bonus(p_date date DEFAULT NULL)
+RETURNS jsonb AS $$
+DECLARE
+  v_draw_date date;
+  v_total_games_today integer;
+  v_distinct_candidates integer;
+  v_candidate RECORD;
+  v_bonus RECORD;
+  v_bonus_amount integer;
+BEGIN
+  -- Default to today in GMT+3 (East Africa Time)
+  IF p_date IS NULL THEN
+    v_draw_date := DATE(now() AT TIME ZONE 'UTC' + interval '3 hours');
+  ELSE
+    v_draw_date := p_date;
+  END IF;
+
+  -- 1. Check if already drawn and credited for this date
+  SELECT * INTO v_bonus FROM daily_super_bonuses WHERE draw_date = v_draw_date;
+  IF FOUND AND v_bonus.status = 'credited' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Daily Super Bonus already credited for date ' || v_draw_date);
+  END IF;
+
+  -- 2. Criterion 1: At least 24 games played on that day
+  SELECT COUNT(*) INTO v_total_games_today
+  FROM games
+  WHERE DATE(finished_at AT TIME ZONE 'UTC' + interval '3 hours') = v_draw_date
+    AND status = 'finished';
+
+  IF v_total_games_today < 24 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Daily Super Bonus requires at least 24 games played today (Current: ' || v_total_games_today || ' games on ' || v_draw_date || ')'
+    );
+  END IF;
+
+  -- 3. Criterion 2: At least 10 distinct winning candidates
+  SELECT COUNT(DISTINCT telegram_user_id) INTO v_distinct_candidates
+  FROM period_winners
+  WHERE period_date = v_draw_date;
+
+  IF v_distinct_candidates < 10 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Daily Super Bonus requires at least 10 distinct candidates (Current: ' || v_distinct_candidates || ' candidates on ' || v_draw_date || ')'
+    );
+  END IF;
+
+  -- 4. Select ONE lucky user among the distinct candidates (each user represented only once)
+  SELECT
+    pw.telegram_user_id,
+    pw.admin_id,
+    MAX(pw.room_stake) as highest_stake,
+    MAX(pw.period_number) as winning_period
+  INTO v_candidate
+  FROM period_winners pw
+  WHERE pw.period_date = v_draw_date
+  GROUP BY pw.telegram_user_id, pw.admin_id
+  ORDER BY random()
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'No candidate found for draw');
+  END IF;
+
+  -- 5. Calculate Mega Super Bonus amount based on the section stake:
+  -- Section 5 birr -> 500 birr mega bonus
+  -- Section 10 birr -> 1000 birr
+  -- Section 15 birr -> 1500 birr
+  -- Section 20 birr -> 2000 birr
+  -- Section 50 birr -> 5000 birr
+  -- Section 100 birr -> 10000 birr
+  IF v_candidate.highest_stake <= 5 THEN
+    v_bonus_amount := 500;
+  ELSIF v_candidate.highest_stake <= 10 THEN
+    v_bonus_amount := 1000;
+  ELSIF v_candidate.highest_stake <= 15 THEN
+    v_bonus_amount := 1500;
+  ELSIF v_candidate.highest_stake <= 20 THEN
+    v_bonus_amount := 2000;
+  ELSIF v_candidate.highest_stake <= 50 THEN
+    v_bonus_amount := 5000;
+  ELSE
+    v_bonus_amount := 10000;
+  END IF;
+
+  -- 6. Add bonus to user's DEPOSITED_BALANCE (avoid cashout loops, keeping liquidity in gameplay)
+  IF v_candidate.admin_id IS NOT NULL THEN
+    UPDATE admin_user_wallets
+    SET
+      deposited_balance = deposited_balance + v_bonus_amount,
+      updated_at = now()
+    WHERE admin_id = v_candidate.admin_id AND telegram_user_id = v_candidate.telegram_user_id;
+
+    INSERT INTO admin_ledger_transactions (
+      admin_id,
+      telegram_user_id,
+      type,
+      amount,
+      description
+    ) VALUES (
+      v_candidate.admin_id,
+      v_candidate.telegram_user_id,
+      'deposit_credited',
+      v_bonus_amount,
+      format('🎉 DAILY MEGA SUPER BONUS! %s ETB credited to Deposited Balance (Section Stake: %s ETB, Period: %s)', v_bonus_amount, v_candidate.highest_stake, v_candidate.winning_period)
+    );
+  ELSE
+    UPDATE telegram_users
+    SET
+      deposited_balance = deposited_balance + v_bonus_amount,
+      balance = balance + v_bonus_amount
+    WHERE telegram_user_id = v_candidate.telegram_user_id;
+  END IF;
+
+  -- 7. Record / Update daily_super_bonuses record
+  INSERT INTO daily_super_bonuses (
+    draw_date,
+    winner_telegram_user_id,
+    winner_admin_id,
+    super_bonus_amount,
+    winning_period_number,
+    highest_stake,
+    status,
+    drawn_at
+  ) VALUES (
+    v_draw_date,
+    v_candidate.telegram_user_id,
+    v_candidate.admin_id,
+    v_bonus_amount,
+    v_candidate.winning_period,
+    v_candidate.highest_stake,
+    'credited',
+    now()
+  )
+  ON CONFLICT (draw_date) DO UPDATE SET
+    winner_telegram_user_id = EXCLUDED.winner_telegram_user_id,
+    winner_admin_id = EXCLUDED.winner_admin_id,
+    super_bonus_amount = EXCLUDED.super_bonus_amount,
+    winning_period_number = EXCLUDED.winning_period_number,
+    highest_stake = EXCLUDED.highest_stake,
+    status = 'credited',
+    drawn_at = now();
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'draw_date', v_draw_date,
+    'winner_telegram_user_id', v_candidate.telegram_user_id,
+    'section_stake', v_candidate.highest_stake,
+    'super_bonus_amount', v_bonus_amount,
+    'winning_period_number', v_candidate.winning_period,
+    'total_games_today', v_total_games_today,
+    'distinct_candidates', v_distinct_candidates
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 19. Edge Case: Refund Unclaimed Game (e.g. all 75 numbers called without winner)
+CREATE OR REPLACE FUNCTION refund_unclaimed_game(p_game_id uuid)
+RETURNS jsonb AS $$
+DECLARE
+  v_game RECORD;
+  v_player RECORD;
+  v_refunded_count integer := 0;
+BEGIN
+  SELECT * INTO v_game FROM games WHERE id = p_game_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Game not found');
+  END IF;
+
+  IF v_game.status != 'finished' OR (v_game.winner_ids IS NOT NULL AND array_length(v_game.winner_ids, 1) > 0) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Game is not an unclaimed finished game');
+  END IF;
+
+  FOR v_player IN SELECT * FROM players WHERE game_id = p_game_id LOOP
+    IF v_player.admin_id IS NOT NULL THEN
+      UPDATE admin_user_wallets
+      SET deposited_balance = deposited_balance + COALESCE(v_game.stake_amount, 10), updated_at = now()
+      WHERE admin_id = v_player.admin_id AND telegram_user_id = v_player.telegram_user_id;
+
+      INSERT INTO admin_ledger_transactions (
+        admin_id, telegram_user_id, game_id, type, amount, description
+      ) VALUES (
+        v_player.admin_id, v_player.telegram_user_id, p_game_id, 'deposit_credited',
+        COALESCE(v_game.stake_amount, 10), 'Refund: Game finished with no Bingo claims'
+      );
+    ELSE
+      UPDATE telegram_users
+      SET balance = balance + COALESCE(v_game.stake_amount, 10), deposited_balance = deposited_balance + COALESCE(v_game.stake_amount, 10)
+      WHERE telegram_user_id = v_player.telegram_user_id;
+    END IF;
+    v_refunded_count := v_refunded_count + 1;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'refunded_players', v_refunded_count);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

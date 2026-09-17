@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Coins, ShieldCheck, Sparkles, PlusCircle, Gamepad2, Brain, Trophy, ChevronRight, Check, Ticket, Clock } from 'lucide-react';
+import { Users, Coins, ShieldCheck, Sparkles, PlusCircle, Gamepad2, Brain, Check, Ticket, Clock } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
 import { Admin, supabase } from '../lib/supabase';
 
@@ -40,7 +40,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
   const [selectedLottoTokens, setSelectedLottoTokens] = useState<number>(1);
   const [lottoPurchaseStatus, setLottoPurchaseStatus] = useState<{ loading: boolean; success?: boolean; message?: string; tickets?: number[] }>({ loading: false });
 
-  const getGroupTheme = (slug: string, stake: number, name: string) => {
+  const getGroupTheme = (slug: string, stake: number, _name?: string) => {
     if (slug.includes('beginner') || stake === 5) {
       return {
         icon: '🌱',
