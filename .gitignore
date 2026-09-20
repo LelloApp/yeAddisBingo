@@ -22,3 +22,5 @@ dist-ssr
 *.sw?
 
 **/supabase.exe
+.firebase
+supabase/.temp

@@ -1,0 +1,164 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { MegaCircleLotto, LottoTokenItem, LottoWinnerItem } from './MegaCircleLotto';
+import { Crown, Sparkles, Coins, ArrowLeft } from 'lucide-react';
+
+interface DailySuperBonusLottoPageProps {
+  telegramUserId: number;
+  userBalance: number;
+  onOpenCashier?: () => void;
+  onBackToLobby?: () => void;
+}
+
+export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> = ({
+  telegramUserId,
+  userBalance,
+  onOpenCashier,
+  onBackToLobby,
+}) => {
+  const [tokens, setTokens] = useState<LottoTokenItem[]>([]);
+  const [totalPot, setTotalPot] = useState<number>(0);
+  const [userTokensCount, setUserTokensCount] = useState<number>(0);
+  const [savedWinners, setSavedWinners] = useState<LottoWinnerItem[]>([]);
+
+  // Calculate draw time for today 19:00 EAT (16:00 UTC)
+  const drawTime = React.useMemo(() => {
+    const now = new Date();
+    const target = new Date();
+    // 19:00 EAT (UTC+3 -> 16:00 UTC)
+    target.setUTCHours(16, 0, 0, 0);
+    if (now.getTime() > target.getTime()) {
+      target.setDate(target.getDate() + 1);
+    }
+    return target;
+  }, []);
+
+  useEffect(() => {
+    loadSuperBonusData();
+    // Hourly update sync as requested
+    const hourlyInterval = setInterval(loadSuperBonusData, 3600000);
+    return () => clearInterval(hourlyInterval);
+  }, [telegramUserId]);
+
+  const loadSuperBonusData = async () => {
+    // 1. Fetch calculated 20% owner cut pot
+    const { data: potData } = await supabase.rpc('get_owner_24h_super_bonus_pot');
+    if (potData !== null && potData !== undefined) {
+      setTotalPot(Number(potData));
+    }
+
+    // 2. Fetch current open Super Bonus round
+    const { data: round } = await supabase
+      .from('daily_lotto_super_bonus_rounds')
+      .select('*')
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .maybeSingle();
+
+    if (round) {
+      // 3. Fetch tokens
+      const { data: tokenRows } = await supabase
+        .from('daily_lotto_super_bonus_tokens')
+        .select('*')
+        .eq('round_id', round.id)
+        .order('created_at', { ascending: true });
+
+      if (tokenRows) {
+        const formatted: LottoTokenItem[] = tokenRows.map((t: any, idx: number) => ({
+          id: t.id,
+          tokenNumber: t.token_number || idx + 1,
+          telegramUserId: t.telegram_user_id,
+          userName: `Winner #${String(t.telegram_user_id).slice(-4)}`,
+          adminId: t.admin_id || 'parcelic',
+          adminName: t.admin_id ? 'Room Agent' : 'Parcelic Admin',
+          adminColor: '#8b5cf6',
+          createdAt: t.created_at,
+        }));
+        setTokens(formatted);
+
+        const myTokens = tokenRows.filter((t: any) => t.telegram_user_id === telegramUserId);
+        setUserTokensCount(myTokens.length);
+      }
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-4 space-y-4 max-w-lg mx-auto pb-16">
+      {/* Top Header */}
+      <div className="flex justify-between items-center bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3">
+        <button
+          onClick={onBackToLobby}
+          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white font-bold"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Rooms</span>
+        </button>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onOpenCashier}
+            className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 rounded-xl text-xs font-bold"
+          >
+            <Coins className="w-3.5 h-3.5" />
+            <span>Balance: {userBalance} ETB</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Qualification & User Tokens Overview */}
+      <div className="bg-gradient-to-br from-purple-950/40 via-slate-900 to-slate-950 border border-purple-500/30 rounded-3xl p-5 space-y-3 shadow-xl">
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30">
+              <Crown className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-black text-white text-base">Daily Lotto Super Bonus</h3>
+              <p className="text-[11px] text-slate-400">
+                Earned automatically by winning in 25, 50, or 100 ETB rooms (12+ players)!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* User Earned Tokens Card */}
+        <div className="bg-slate-950/80 border border-purple-500/20 rounded-2xl p-3 flex justify-between items-center text-xs">
+          <div>
+            <div className="text-[10px] text-purple-300 font-bold uppercase">Your Super Bonus Tokens Today:</div>
+            <div className="text-xl font-black text-white mt-0.5 font-mono">
+              {userTokensCount} {userTokensCount === 1 ? 'Token' : 'Tokens'}
+            </div>
+          </div>
+          <div className="text-right text-[11px] text-slate-400">
+            {userTokensCount > 0 ? '🎟️ Registered for 7:00 PM Draw' : 'Win in 25+ ETB rooms to qualify'}
+          </div>
+        </div>
+
+        {/* Rules & Pot Threshold Note */}
+        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 text-[11px] text-slate-300 space-y-1">
+          <div className="flex items-center gap-1.5 text-amber-400 font-bold">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>24-Hour Cycle & Reset Rules:</span>
+          </div>
+          <p className="text-slate-400 text-[10px]">
+            • Winning 25 ETB room gives <b>1 Token</b> • 50 ETB gives <b>2 Tokens</b> • 100 ETB gives <b>4 Tokens</b>.
+          </p>
+          <p className="text-slate-400 text-[10px]">
+            • If the 7:00 PM winning pot is under 1,000 ETB, tokens are scrapped and restart fresh for tomorrow.
+          </p>
+        </div>
+      </div>
+
+      {/* Live Interactive Mega Circle Component */}
+      <MegaCircleLotto
+        title="Super Bonus Lotto (7:00 PM Draw)"
+        tokens={tokens}
+        totalPot={totalPot}
+        drawTime={drawTime}
+        isSuperBonus={true}
+        savedWinners={savedWinners}
+        onDrawCompleted={(winners) => setSavedWinners(winners)}
+      />
+    </div>
+  );
+};

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -143,8 +143,6 @@ export function useGameRealtimeUpdates(
     onPlayersUpdate: () => void;
   }
 ) {
-  const subscriptionId = useRef<string>(Math.random().toString(36).substr(2, 9));
-
   useOptimizedRealtimeSubscription(
     `game:${gameId}`,
     [

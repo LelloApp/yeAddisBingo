@@ -74,6 +74,7 @@ export interface Admin {
   telegram_user_id?: number;
   commission_rate?: number;
   float_balance?: number;
+  phone?: string;
 }
 
 export interface GameCatalogItem {
@@ -163,4 +164,162 @@ export interface DailySuperBonus {
   status: 'pending' | 'drawn' | 'credited';
   drawn_at?: string;
 }
+
+export interface SuperAdmin {
+  id: string;
+  username: string;
+  display_name: string;
+  phone?: string;
+  float_balance: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface SuperAdminCreditPurchase {
+  id: string;
+  super_admin_id: string;
+  amount_paid: number;
+  bonus_percentage: number;
+  bonus_amount: number;
+  total_credit_received: number;
+  confirmation_message: string;
+  parsed_transaction_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  notes?: string;
+  created_at: string;
+  approved_at?: string;
+}
+
+export interface AdminCreditRequest {
+  id: string;
+  admin_id: string;
+  super_admin_id?: string;
+  amount: number;
+  confirmation_message: string;
+  parsed_transaction_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  notes?: string;
+  created_at: string;
+  approved_at?: string;
+  admins?: Admin;
+}
+
+export interface UserFinancialRequest {
+  id: string;
+  telegram_user_id: number;
+  admin_id: string;
+  type: 'topup' | 'cashout';
+  amount: number;
+  payment_method: string;
+  account_number?: string;
+  account_name?: string;
+  confirmation_message?: string;
+  parsed_transaction_id?: string;
+  admin_confirmation_message?: string;
+  admin_transaction_id?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  notes?: string;
+  created_at: string;
+  reviewed_at?: string;
+  telegram_users?: {
+    telegram_username?: string;
+    telegram_first_name?: string;
+  };
+}
+
+export interface OwnerDailyCut {
+  id: string;
+  source_admin_id?: string;
+  game_id?: string;
+  room_id?: string;
+  room_stake?: number;
+  players_count?: number;
+  pot_amount: number;
+  commission_total: number;
+  admin_cut_amount: number;
+  owner_cut_amount: number;
+  session_info?: string;
+  created_at: string;
+}
+
+export interface OwnerDailyCutLotto {
+  id: string;
+  source_admin_id?: string;
+  round_id?: string;
+  telegram_user_id?: number;
+  token_count: number;
+  token_price: number;
+  total_spent: number;
+  admin_cut_amount: number;
+  owner_cut_amount: number;
+  pot_addition: number;
+  notes?: string;
+  created_at: string;
+}
+
+export interface DailyLottoRoundV2 {
+  id: string;
+  round_number: number;
+  status: 'open' | 'drawing' | 'finished' | 'rolled_over';
+  ticket_price: number;
+  total_pot: number;
+  rollover_pot: number;
+  admin_cut_total: number;
+  owner_cut_total: number;
+  total_tokens: number;
+  unique_users_count: number;
+  draw_time?: string;
+  finished_at?: string;
+  created_at: string;
+}
+
+export interface DailyLottoTokenV2 {
+  id: string;
+  round_id: string;
+  telegram_user_id: number;
+  admin_id?: string;
+  token_number: number;
+  created_at: string;
+  userName?: string;
+  adminName?: string;
+}
+
+export interface DailyLottoWinnerV2 {
+  id: string;
+  round_id: string;
+  rank: number;
+  telegram_user_id: number;
+  admin_id?: string;
+  prize_amount: number;
+  token_number: number;
+  created_at: string;
+  userName?: string;
+  adminName?: string;
+}
+
+export interface DailySuperBonusRoundV2 {
+  id: string;
+  round_number: number;
+  status: 'open' | 'drawing' | 'finished' | 'scrapped';
+  total_pot: number;
+  total_tokens: number;
+  unique_users_count: number;
+  draw_time?: string;
+  finished_at?: string;
+  created_at: string;
+}
+
+export interface DailySuperBonusTokenV2 {
+  id: string;
+  round_id: string;
+  telegram_user_id: number;
+  admin_id?: string;
+  source_room_slug?: string;
+  source_game_id?: string;
+  token_number: number;
+  created_at: string;
+  userName?: string;
+  adminName?: string;
+}
+
 

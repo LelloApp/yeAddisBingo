@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { supabase, Game, Player } from '../lib/supabase';
-import { Shield, XCircle, Users, Clock, Trophy, Settings, DollarSign, TrendingUp, CircleUser as UserCircle, Wallet, ArrowDownToLine } from 'lucide-react';
+import { supabase, Game, Player, Admin as AdminType } from '../lib/supabase';
+import { Shield, XCircle, Users, Clock, Trophy, Settings, DollarSign, TrendingUp, CircleUser as UserCircle, Wallet, ArrowDownToLine, Crown } from 'lucide-react';
 import { DepositManagement } from './DepositManagement';
 import { BnbWithdrawalManagement } from './BnbWithdrawalManagement';
+import { AdminFinancialManager } from './AdminFinancialManager';
+import { SuperAdminOwnerPortal } from './SuperAdminOwnerPortal';
 import { formatBnb } from '../utils/formatBalance';
 
 interface UserSpending {
@@ -29,7 +31,9 @@ export function Admin() {
   const [accessKey, setAccessKey] = useState('');
   const [games, setGames] = useState<Game[]>([]);
   const [playersByGame, setPlayersByGame] = useState<Record<string, Player[]>>({});
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'users' | 'deposits' | 'withdrawals' | 'settings'>('dashboard');
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'users' | 'deposits' | 'withdrawals' | 'settings' | 'finances' | 'super_owner'>('dashboard');
+  const [adminsList, setAdminsList] = useState<AdminType[]>([]);
+  const [selectedAdminObj, setSelectedAdminObj] = useState<AdminType | null>(null);
   const [users, setUsers] = useState<UserSpending[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [telegramToken, setTelegramToken] = useState('');
@@ -54,6 +58,7 @@ export function Admin() {
       loadGames();
       loadSettings();
       loadStatistics();
+      loadAdmins();
 
       const gamesChannel = supabase
         .channel('admin-games')
@@ -250,6 +255,14 @@ export function Admin() {
     });
 
     setRecentActivity(activityByDate);
+  };
+
+  const loadAdmins = async () => {
+    const { data } = await supabase.from('admins').select('*').eq('is_active', true).order('sort_order', { ascending: true });
+    if (data && data.length > 0) {
+      setAdminsList(data);
+      setSelectedAdminObj(data[0]);
+    }
   };
 
   const loadUsers = async () => {
@@ -504,6 +517,8 @@ export function Admin() {
             <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto w-full sm:w-auto scrollbar-hide">
               {([
                 { key: 'dashboard', label: 'Dashboard', icon: Shield },
+                { key: 'finances', label: 'Agent Finances', icon: DollarSign },
+                { key: 'super_owner', label: 'Super & Owner', icon: Crown },
                 { key: 'users', label: 'Users', icon: UserCircle },
                 { key: 'deposits', label: 'Deposits', icon: Wallet },
                 { key: 'withdrawals', label: 'Withdrawals', icon: ArrowDownToLine },
@@ -557,6 +572,21 @@ export function Admin() {
                 </div>
               ))}
             </div>
+
+            {recentActivity.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200/60 p-4 mb-6">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Recent 7-Day Activity</h4>
+                <div className="grid grid-cols-7 gap-2">
+                  {recentActivity.map((act) => (
+                    <div key={act.date} className="bg-slate-50 p-2 rounded-lg text-center">
+                      <div className="text-[10px] text-slate-500">{act.date}</div>
+                      <div className="text-xs font-bold text-slate-800">{act.games} games</div>
+                      <div className="text-[10px] text-emerald-600 font-mono">{act.revenue} BNB</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -749,6 +779,41 @@ export function Admin() {
             </div>
             <BnbWithdrawalManagement adminKey={accessKey} />
           </>
+        )}
+
+        {currentPage === 'finances' && (
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+            {adminsList.length > 1 && (
+              <div className="mb-4 flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500">Selected Agent:</span>
+                <div className="flex gap-1.5 overflow-x-auto">
+                  {adminsList.map((adm) => (
+                    <button
+                      key={adm.id}
+                      onClick={() => setSelectedAdminObj(adm)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                        selectedAdminObj?.id === adm.id
+                          ? 'bg-amber-500 text-slate-950 shadow-sm'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {adm.display_name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <AdminFinancialManager
+              currentAdmin={selectedAdminObj}
+              onRefreshBalances={loadStatistics}
+            />
+          </div>
+        )}
+
+        {currentPage === 'super_owner' && (
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+            <SuperAdminOwnerPortal />
+          </div>
         )}
 
         {currentPage === 'settings' && (

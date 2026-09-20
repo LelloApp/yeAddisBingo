@@ -22,9 +22,12 @@ interface GroupSelectorProps {
   userBalance: number;
   onSelectGroup: (group: BingoGroup) => void;
   onOpenDepositGuide: (group: BingoGroup) => void;
+  onNavigateToLotto?: () => void;
+  onNavigateToSuperBonus?: () => void;
+  onOpenCashier?: () => void;
 }
 
-type ActiveGameTab = 'bingo' | 'lotto' | 'quiz';
+type ActiveGameTab = 'bingo' | 'lotto' | 'super_bonus' | 'quiz';
 
 export const GroupSelector: React.FC<GroupSelectorProps> = ({
   groups,
@@ -34,6 +37,9 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
   userBalance,
   onSelectGroup,
   onOpenDepositGuide,
+  onNavigateToLotto,
+  onNavigateToSuperBonus,
+  onOpenCashier,
 }) => {
   const [activeTab, setActiveTab] = useState<ActiveGameTab>('bingo');
   const [showAdminPicker, setShowAdminPicker] = useState(false);
@@ -71,10 +77,10 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
         badgeBg: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
       };
     }
-    if (slug.includes('classic') || stake === 20) {
+    if (slug.includes('classic') || stake === 25 || stake === 20) {
       return {
         icon: '🏆',
-        badge: 'Addis Classic',
+        badge: '🏆 1 Super Bonus Token (12+ Players)',
         border: 'border-yellow-500/40 hover:border-yellow-400',
         bg: 'from-yellow-950/30 via-slate-900 to-slate-950',
         accent: 'text-yellow-400',
@@ -84,7 +90,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
     if (slug.includes('vip') || stake === 50) {
       return {
         icon: '💎',
-        badge: 'VIP Diamond',
+        badge: '💎 2 Super Bonus Tokens (12+ Players)',
         border: 'border-cyan-500/40 hover:border-cyan-400',
         bg: 'from-cyan-950/30 via-slate-900 to-slate-950',
         accent: 'text-cyan-400',
@@ -93,7 +99,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
     }
     return {
       icon: '👑',
-      badge: 'High Roller',
+      badge: '👑 4 Super Bonus Tokens (12+ Players)',
       border: 'border-purple-500/40 hover:border-purple-400',
       bg: 'from-purple-950/30 via-slate-900 to-slate-950',
       accent: 'text-purple-400',
@@ -110,12 +116,16 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
 
   const handleOpenTopup = () => {
     triggerHaptic('light');
-    const username = currentAdmin.telegram_username ? currentAdmin.telegram_username.replace(/^@/, '') : 'parcelic';
-    const url = `https://t.me/${username}`;
-    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.openTelegramLink) {
-      (window as any).Telegram.WebApp.openTelegramLink(url);
+    if (onOpenCashier) {
+      onOpenCashier();
     } else {
-      window.open(url, '_blank');
+      const username = currentAdmin.telegram_username ? currentAdmin.telegram_username.replace(/^@/, '') : 'parcelic';
+      const url = `https://t.me/${username}`;
+      if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.openTelegramLink) {
+        (window as any).Telegram.WebApp.openTelegramLink(url);
+      } else {
+        window.open(url, '_blank');
+      }
     }
   };
 
@@ -135,7 +145,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
         </p>
       </div>
 
-      {/* Game Catalog Tabs (Bingo, Quiz, Chez) */}
+      {/* Game Catalog Tabs (Bingo, Daily Lotto 6PM, Super Bonus 7PM) */}
       <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-2xl shadow-inner">
         <button
           onClick={() => {
@@ -149,37 +159,35 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
           }`}
         >
           <Gamepad2 className="w-4 h-4" />
-          <span>Bingo</span>
+          <span>Bingo (6)</span>
         </button>
 
         <button
           onClick={() => {
             triggerHaptic('light');
-            setActiveTab('lotto');
+            if (onNavigateToLotto) {
+              onNavigateToLotto();
+            } else {
+              setActiveTab('lotto');
+            }
           }}
-          className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-            activeTab === 'lotto'
-              ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md shadow-amber-500/20'
-              : 'text-slate-400 hover:text-white'
-          }`}
+          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all text-slate-400 hover:text-white"
         >
-          <Ticket className="w-4 h-4" />
-          <span>Daily Lotto</span>
+          <Ticket className="w-4 h-4 text-amber-400" />
+          <span>Lotto 6PM</span>
         </button>
 
         <button
           onClick={() => {
             triggerHaptic('light');
-            setActiveTab('quiz');
+            if (onNavigateToSuperBonus) {
+              onNavigateToSuperBonus();
+            }
           }}
-          className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-            activeTab === 'quiz'
-              ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md shadow-blue-500/20'
-              : 'text-slate-400 hover:text-white'
-          }`}
+          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all text-slate-400 hover:text-white"
         >
-          <Brain className="w-4 h-4" />
-          <span>Quiz</span>
+          <Sparkles className="w-4 h-4 text-purple-400" />
+          <span>Super 7PM</span>
         </button>
       </div>
 

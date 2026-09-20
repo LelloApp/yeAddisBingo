@@ -18,7 +18,7 @@ const headerColors = [
   'bg-blue-700'
 ];
 
-export const BingoCard = memo(function BingoCard({ card, markedCells, onCellClick, calledNumbers, disabled = false, isDarkMode = false }: BingoCardProps) {
+export const BingoCard = memo(function BingoCard({ card, markedCells, onCellClick, calledNumbers: _calledNumbers, disabled = false, isDarkMode = false }: BingoCardProps) {
   // Memoize the cell rendering to avoid recalculating on every render
   const cells = useMemo(() => {
     return Array.from({ length: 5 }, (_, rowIndex) =>

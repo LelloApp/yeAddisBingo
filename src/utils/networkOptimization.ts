@@ -31,7 +31,7 @@ export class NetworkQualityMonitor {
   async measureLatency(): Promise<number> {
     const start = Date.now();
     try {
-      const response = await fetch('/', { method: 'HEAD', cache: 'no-store' });
+      await fetch('/', { method: 'HEAD', cache: 'no-store' });
       const latency = Date.now() - start;
 
       this.latencies.push(latency);

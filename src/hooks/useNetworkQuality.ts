@@ -23,15 +23,15 @@ export function useNetworkQuality() {
   useEffect(() => {
     const monitor = getGlobalMonitor();
 
-    const handleQualityChange = (newQuality: NetworkQuality) => {
-      setQuality(newQuality);
-      setShowNetworkWarning(!newQuality.isGoodConnection);
-    };
+    monitor.measureLatency().then(() => {
+      setQuality(monitor.getQuality());
+      setShowNetworkWarning(!monitor.getQuality().isGoodConnection);
+    });
 
-    monitor.measureLatency();
-
-    const interval = setInterval(() => {
-      monitor.measureLatency();
+    const interval = setInterval(async () => {
+      await monitor.measureLatency();
+      setQuality(monitor.getQuality());
+      setShowNetworkWarning(!monitor.getQuality().isGoodConnection);
     }, 30000);
 
     return () => clearInterval(interval);

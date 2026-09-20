@@ -18,7 +18,7 @@ interface BankDepositModalProps {
   telegramUserId: number;
 }
 
-export function BankDepositModal({ isOpen, onClose, telegramUserId }: BankDepositModalProps) {
+export function BankDepositModal({ isOpen, onClose, telegramUserId: _telegramUserId }: BankDepositModalProps) {
   const [banks, setBanks] = useState<BankOption[]>([]);
   const [selectedBank, setSelectedBank] = useState<BankOption | null>(null);
   const [isLoading, setIsLoading] = useState(false);

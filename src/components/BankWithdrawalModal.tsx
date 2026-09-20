@@ -258,7 +258,9 @@ export function BankWithdrawalModal({
                   <p className="text-gray-600 dark:text-gray-300 mb-4">
                     Select your bank:
                   </p>
-                  {banks.map((bank) => (
+                  {isLoading ? (
+                    <div className="p-4 text-center text-sm text-gray-500">Loading bank options...</div>
+                  ) : banks.map((bank) => (
                     <button
                       key={bank.id}
                       onClick={() => setSelectedBank(bank.bank_name)}

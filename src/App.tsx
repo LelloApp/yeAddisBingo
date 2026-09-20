@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { WagmiProvider } from 'wagmi';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useAccount } from 'wagmi';
@@ -10,11 +10,14 @@ import { supabase, Admin as AdminType } from './lib/supabase';
 import { initTelegram, TelegramUser } from './utils/telegram';
 import { config, queryClient } from './lib/walletConfig';
 import { GroupSelector, BingoGroup } from './components/GroupSelector';
-import { ExternalLink, X, ArrowLeft } from 'lucide-react';
+import { DailyLottoPage } from './components/DailyLottoPage';
+import { DailySuperBonusLottoPage } from './components/DailySuperBonusLottoPage';
+import { CashierModal } from './components/CashierModal';
+import { ExternalLink, X } from 'lucide-react';
 
 const Admin = lazy(() => import('./components/Admin').then(module => ({ default: module.Admin })));
 
-type View = 'lobby' | 'game' | 'admin';
+type View = 'lobby' | 'game' | 'admin' | 'daily_lotto' | 'super_bonus';
 
 function AppContent() {
   const { address, isConnected } = useAccount();
@@ -24,7 +27,10 @@ function AppContent() {
   const [playerId, setPlayerId] = useState<string | null>(() => localStorage.getItem('playerId'));
   const [gameStarted, setGameStarted] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showCashierModal, setShowCashierModal] = useState(false);
   const [userBalance, setUserBalance] = useState(0);
+  const [wonBalance, setWonBalance] = useState(0);
+  const [depositedBalance, setDepositedBalance] = useState(0);
   const [selectedGroup, setSelectedGroup] = useState<BingoGroup | null>(null);
   const [groups, setGroups] = useState<BingoGroup[]>([]);
   const [admins, setAdmins] = useState<AdminType[]>([]);
@@ -75,11 +81,11 @@ function AppContent() {
       {
         id: 'addis_classic',
         slug: 'addis_classic',
-        name: '🏆 Addis Classic (20 ETB)',
+        name: '🏆 Addis Classic (25 ETB)',
         admin_name: 'Parcelic Admin',
         admin_username: 'parcelic',
-        stake_amount: 20,
-        min_balance: 20,
+        stake_amount: 25,
+        min_balance: 25,
         online_players_count: 30,
       },
       {
@@ -214,6 +220,8 @@ function AppContent() {
           .maybeSingle();
 
         if (wallet) {
+          setDepositedBalance(wallet.deposited_balance || 0);
+          setWonBalance(wallet.won_balance || 0);
           const total = (wallet.deposited_balance || 0) + (wallet.won_balance || 0);
           setUserBalance(total);
           return;
@@ -228,6 +236,8 @@ function AppContent() {
         .maybeSingle();
 
       if (data) {
+        setDepositedBalance(data.deposited_balance || 0);
+        setWonBalance(data.won_balance || 0);
         const total = (data.deposited_balance || 0) + (data.won_balance || 0) || data.balance || 0;
         setUserBalance(total);
       }
@@ -521,15 +531,36 @@ function AppContent() {
     return (
       <GameRoom
         gameId={gameId}
-        playerId={playerId || ''}
-        isSpectator={!playerId}
-        onLeave={() => {
+        playerId={playerId}
+        onReturnToLobby={() => {
           setGameId(null);
           setPlayerId(null);
           setGameStarted(false);
           setView('lobby');
         }}
-        telegramUser={appUser}
+      />
+    );
+  }
+
+  if (view === 'daily_lotto') {
+    return (
+      <DailyLottoPage
+        currentAdmin={selectedAdmin}
+        telegramUserId={appUser?.id || 123456789}
+        userBalance={userBalance}
+        onOpenCashier={() => setShowCashierModal(true)}
+        onBackToLobby={() => setView('lobby')}
+      />
+    );
+  }
+
+  if (view === 'super_bonus') {
+    return (
+      <DailySuperBonusLottoPage
+        telegramUserId={appUser?.id || 123456789}
+        userBalance={userBalance}
+        onOpenCashier={() => setShowCashierModal(true)}
+        onBackToLobby={() => setView('lobby')}
       />
     );
   }
@@ -545,6 +576,9 @@ function AppContent() {
           userBalance={userBalance}
           onSelectGroup={(group) => setSelectedGroup(group)}
           onOpenDepositGuide={(group) => setInsufficientModalGroup(group)}
+          onNavigateToLotto={() => setView('daily_lotto')}
+          onNavigateToSuperBonus={() => setView('super_bonus')}
+          onOpenCashier={() => setShowCashierModal(true)}
         />
 
         {insufficientModalGroup && (
@@ -619,6 +653,18 @@ function AppContent() {
           onSuccess={() => setShowDepositModal(false)}
         />
       )}
+      <CashierModal
+        isOpen={showCashierModal}
+        onClose={() => setShowCashierModal(false)}
+        telegramUserId={appUser?.id || 123456789}
+        selectedAdmin={selectedAdmin}
+        userBalance={userBalance}
+        wonBalance={wonBalance}
+        depositedBalance={depositedBalance}
+        onBalanceUpdated={() => {
+          // Re-sync balance
+        }}
+      />
       <NetworkQualityIndicator />
     </>
   );
