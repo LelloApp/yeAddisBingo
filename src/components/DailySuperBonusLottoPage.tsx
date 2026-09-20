@@ -113,9 +113,9 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
               <Crown className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-black text-white text-base">Daily Lotto Super Bonus</h3>
+              <h3 className="font-black text-white text-base">ዕለታዊ የሱፐር ቦነስ ሎቶ (ካዝና)</h3>
               <p className="text-[11px] text-slate-400">
-                Earned automatically by winning in 25, 50, or 100 ETB rooms (12+ players)!
+                በ25፣ 50 ወይም 100 ብር ክፍሎች (12+ ተጫዋቾች ሲኖሩ) በማሸነፍ በነጻ የሚገኝ እጣ!
               </p>
             </div>
           </div>
@@ -124,13 +124,13 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
         {/* User Earned Tokens Card */}
         <div className="bg-slate-950/80 border border-purple-500/20 rounded-2xl p-3 flex justify-between items-center text-xs">
           <div>
-            <div className="text-[10px] text-purple-300 font-bold uppercase">Your Super Bonus Tokens Today:</div>
+            <div className="text-[10px] text-purple-300 font-bold uppercase">የዛሬው ያገኙት የሱፐር ቦነስ እጣዎች:</div>
             <div className="text-xl font-black text-white mt-0.5 font-mono">
-              {userTokensCount} {userTokensCount === 1 ? 'Token' : 'Tokens'}
+              {userTokensCount} {userTokensCount === 1 ? 'እጣ' : 'እጣዎች'}
             </div>
           </div>
           <div className="text-right text-[11px] text-slate-400">
-            {userTokensCount > 0 ? '🎟️ Registered for 7:00 PM Draw' : 'Win in 25+ ETB rooms to qualify'}
+            {userTokensCount > 0 ? '🎟️ ለማታ 1 ሰአት እጣ ተመዝግቧል' : 'ለማግኘት ከ25+ ብር ክፍሎች ያሸንፉ'}
           </div>
         </div>
 
@@ -138,20 +138,20 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
         <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 text-[11px] text-slate-300 space-y-1">
           <div className="flex items-center gap-1.5 text-amber-400 font-bold">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>24-Hour Cycle & Reset Rules:</span>
+            <span>የ24-ሰአት ዑደት እና ህጎች:</span>
           </div>
           <p className="text-slate-400 text-[10px]">
-            • Winning 25 ETB room gives <b>1 Token</b> • 50 ETB gives <b>2 Tokens</b> • 100 ETB gives <b>4 Tokens</b>.
+            • 25 ብር ክፍል ሲያሸንፉ <b>1 እጣ</b> • 50 ብር ክፍል ሲያሸንፉ <b>2 እጣዎች</b> • 100 ብር ክፍል ሲያሸንፉ <b>4 እጣዎች</b> ይሰጣል።
           </p>
           <p className="text-slate-400 text-[10px]">
-            • If the 7:00 PM winning pot is under 1,000 ETB, tokens are scrapped and restart fresh for tomorrow.
+            • የማታ 1 ሰአት የካዝናው መጠን ከ1,000 ብር በታች ከሆነ እጣዎቹ ተሰርዘው ለነገ በአዲስ ይጀምራሉ።
           </p>
         </div>
       </div>
 
       {/* Live Interactive Mega Circle Component */}
       <MegaCircleLotto
-        title="Super Bonus Lotto (7:00 PM Draw)"
+        title="ሱፐር ቦነስ ሎቶ (ማታ 1 ሰአት)"
         tokens={tokens}
         totalPot={totalPot}
         drawTime={drawTime}

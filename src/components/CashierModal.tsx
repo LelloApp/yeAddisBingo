@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ArrowDownToLine, ArrowUpFromLine, History, CheckCircle, AlertTriangle, Copy, Check, Sparkles, Send } from 'lucide-react';
+import { X, ArrowDownToLine, ArrowUpFromLine, History, CheckCircle, AlertTriangle, Copy, Check, Sparkles, Send, UploadCloud, Image, Eye, ShieldAlert } from 'lucide-react';
 import { supabase, Admin, UserFinancialRequest } from '../lib/supabase';
 import { parseTransactionMessage } from '../utils/transactionParser';
 import { triggerHaptic } from '../utils/telegram';
@@ -32,12 +32,16 @@ export const CashierModal: React.FC<CashierModalProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<string>('telebirr');
   const [confirmationMessage, setConfirmationMessage] = useState<string>('');
   const [parsedTxnId, setParsedTxnId] = useState<string>('');
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [accountNumber, setAccountNumber] = useState<string>('');
   const [accountName, setAccountName] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [history, setHistory] = useState<UserFinancialRequest[]>([]);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [viewingReceiptUrl, setViewingReceiptUrl] = useState<string | null>(null);
+  const [disputeModalItem, setDisputeModalItem] = useState<UserFinancialRequest | null>(null);
+  const [disputeReason, setDisputeReason] = useState<string>('');
 
   useEffect(() => {
     if (isOpen && activeTab === 'history') {
@@ -78,6 +82,39 @@ export const CashierModal: React.FC<CashierModalProps> = ({
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  const handleReceiptImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setReceiptImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleConfirmCashoutReceived = async (reqId: string) => {
+    triggerHaptic('heavy');
+    await supabase.rpc('user_confirm_cashout_receipt', {
+      p_request_id: reqId,
+      p_telegram_user_id: telegramUserId,
+    });
+    loadHistory();
+  };
+
+  const handleReportDispute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!disputeModalItem) return;
+    triggerHaptic('warning');
+    await supabase.rpc('report_embezzlement_or_dispute', {
+      p_request_id: disputeModalItem.id,
+      p_reporter_id: telegramUserId,
+      p_reason: disputeReason || 'Funds not received or false receipt attached',
+    });
+    setDisputeModalItem(null);
+    setDisputeReason('');
+    loadHistory();
+  };
+
   const handleTopupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAdmin?.id) {
@@ -89,23 +126,20 @@ export const CashierModal: React.FC<CashierModalProps> = ({
       setStatusMessage({ type: 'error', text: 'Enter a valid top-up amount.' });
       return;
     }
-    if (!parsedTxnId.trim()) {
-      setStatusMessage({ type: 'error', text: 'Please enter or confirm the Transaction ID.' });
-      return;
-    }
 
     setIsLoading(true);
     setStatusMessage(null);
     triggerHaptic('medium');
 
     try {
+      const finalTxn = parsedTxnId.trim() ? parsedTxnId.trim().toUpperCase() : null;
       const { data, error } = await supabase.rpc('submit_user_topup_request', {
         p_telegram_user_id: telegramUserId,
         p_admin_id: selectedAdmin.id,
         p_amount: numAmount,
         p_payment_method: paymentMethod,
-        p_confirmation_message: confirmationMessage,
-        p_parsed_transaction_id: parsedTxnId.trim().toUpperCase(),
+        p_confirmation_message: confirmationMessage || (receiptImage ? 'Payment receipt attached' : 'Direct payment confirmation'),
+        p_parsed_transaction_id: finalTxn,
       });
 
       if (error || !data?.success) {
@@ -114,12 +148,20 @@ export const CashierModal: React.FC<CashierModalProps> = ({
           text: data?.error || error?.message || 'Failed to submit top up request.',
         });
       } else {
+        if (receiptImage && data?.request_id) {
+          await supabase
+            .from('user_financial_requests')
+            .update({ receipt_image_url: receiptImage })
+            .eq('id', data.request_id);
+        }
+
         setStatusMessage({
           type: 'success',
-          text: '🎉 Top-up request submitted successfully! Your Admin will approve it shortly.',
+          text: '🎉 Top-up request submitted successfully! Your Admin will verify and approve.',
         });
         setConfirmationMessage('');
         setParsedTxnId('');
+        setReceiptImage(null);
         if (onBalanceUpdated) onBalanceUpdated();
       }
     } catch (err: any) {
@@ -376,6 +418,46 @@ export const CashierModal: React.FC<CashierModalProps> = ({
                 />
               </div>
 
+              {/* Receipt Image Upload */}
+              <div className="space-y-1.5 bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
+                <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <UploadCloud className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Attach Payment Receipt / Screenshot</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 py-2 px-3 border border-dashed border-slate-700 hover:border-amber-500 rounded-xl bg-slate-900/60 text-slate-300 text-xs transition-colors">
+                    <Image className="w-4 h-4 text-amber-400" />
+                    <span>{receiptImage ? 'Change Receipt Photo' : 'Select Receipt Image'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleReceiptImageChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {receiptImage && (
+                    <div className="relative group">
+                      <img
+                        src={receiptImage}
+                        alt="Receipt preview"
+                        className="w-12 h-12 object-cover rounded-lg border border-amber-500/50 cursor-pointer"
+                        onClick={() => setViewingReceiptUrl(receiptImage)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setReceiptImage(null)}
+                        className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center shadow"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Parsed / Verified Transaction ID */}
               <div className="space-y-1.5 bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
                 <div className="flex justify-between items-center text-xs">
@@ -385,7 +467,7 @@ export const CashierModal: React.FC<CashierModalProps> = ({
                       <CheckCircle className="w-3 h-3" /> Auto-Detected
                     </span>
                   ) : (
-                    <span className="text-[10px] text-amber-400 font-bold">Manual / Edit</span>
+                    <span className="text-[10px] text-amber-400 font-bold">Manual (Optional)</span>
                   )}
                 </div>
                 <input
@@ -396,7 +478,7 @@ export const CashierModal: React.FC<CashierModalProps> = ({
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500"
                 />
                 <p className="text-[10px] text-slate-500">
-                  Transaction IDs are verified and recorded to prevent duplicate credits.
+                  Either paste SMS message, enter reference, or attach receipt screenshot.
                 </p>
               </div>
 
@@ -420,7 +502,7 @@ export const CashierModal: React.FC<CashierModalProps> = ({
                   <span>Instant Cashout from Won Balance</span>
                 </div>
                 <p className="text-slate-400 text-[11px]">
-                  Only cash won in games can be cashed out. Deposited balance is preserved for gameplay.
+                  Only cash won in games can be cashed out. Deposited balance is preserved for gameplay. Admin will send payment and attach official transfer receipt.
                 </p>
                 <div className="text-sm font-bold text-white pt-1">
                   Available to Withdraw: <span className="text-emerald-400">{wonBalance} ETB</span>
@@ -506,7 +588,7 @@ export const CashierModal: React.FC<CashierModalProps> = ({
 
           {/* History Tab */}
           {activeTab === 'history' && (
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               <div className="text-xs font-bold text-slate-300 flex justify-between items-center">
                 <span>Recent Financial Requests</span>
                 <button
@@ -525,46 +607,189 @@ export const CashierModal: React.FC<CashierModalProps> = ({
                 history.map((item) => (
                   <div
                     key={item.id}
-                    className="bg-slate-950 border border-slate-800/80 rounded-2xl p-3 flex justify-between items-center text-xs"
+                    className="bg-slate-950 border border-slate-800/80 rounded-2xl p-3 text-xs space-y-2"
                   >
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`font-black uppercase text-[11px] ${
+                              item.type === 'topup' ? 'text-amber-400' : 'text-emerald-400'
+                            }`}
+                          >
+                            {item.type === 'topup' ? '📥 Top Up' : '📤 Cash Out'}
+                          </span>
+                          <span className="font-bold text-white text-sm">{item.amount} ETB</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                          {item.parsed_transaction_id || item.admin_transaction_id || item.payment_method}
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          {new Date(item.created_at).toLocaleString()}
+                        </div>
+                      </div>
+
+                      <div>
                         <span
-                          className={`font-black uppercase text-[11px] ${
-                            item.type === 'topup' ? 'text-amber-400' : 'text-emerald-400'
+                          className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                            item.status === 'approved'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              : item.status === 'rejected'
+                              ? 'bg-red-500/20 text-red-300 border-red-500/30'
+                              : 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
                           }`}
                         >
-                          {item.type === 'topup' ? '📥 Top Up' : '📤 Cash Out'}
+                          {item.status.toUpperCase()}
                         </span>
-                        <span className="font-bold text-white">{item.amount} ETB</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
-                        {item.parsed_transaction_id || item.admin_transaction_id || item.payment_method}
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        {new Date(item.created_at).toLocaleString()}
                       </div>
                     </div>
 
-                    <div>
-                      <span
-                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
-                          item.status === 'approved'
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                            : item.status === 'rejected'
-                            ? 'bg-red-500/20 text-red-300 border-red-500/30'
-                            : 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
-                        }`}
-                      >
-                        {item.status.toUpperCase()}
-                      </span>
+                    {/* Receipt Previews */}
+                    <div className="flex items-center gap-2 pt-1 border-t border-slate-900">
+                      {item.receipt_image_url && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingReceiptUrl(item.receipt_image_url!)}
+                          className="flex items-center gap-1 text-[11px] text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-1 rounded-lg border border-amber-500/30 transition-colors"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>Your Receipt</span>
+                        </button>
+                      )}
+
+                      {item.admin_receipt_image_url && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingReceiptUrl(item.admin_receipt_image_url!)}
+                          className="flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-lg border border-emerald-500/30 transition-colors"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>Admin Payout Slip</span>
+                        </button>
+                      )}
                     </div>
+
+                    {/* Cashout Confirmation & Dispute Actions for approved cashouts */}
+                    {item.type === 'cashout' && item.status === 'approved' && (
+                      <div className="bg-slate-900/90 rounded-xl p-2.5 border border-slate-800 space-y-2">
+                        {item.is_flagged_embezzlement ? (
+                          <div className="flex items-center gap-1.5 text-[11px] text-red-400 font-bold">
+                            <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span>Flagged to Owner: {item.flag_reason || 'Disputed'}</span>
+                          </div>
+                        ) : item.user_confirmed_cashout ? (
+                          <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-bold">
+                            <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span>Received & Confirmed by You</span>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            <p className="text-[10px] text-slate-400">
+                              Admin completed the transfer. Did you receive the funds into your account?
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmCashoutReceived(item.id)}
+                                className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>I Received Funds</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDisputeModalItem(item)}
+                                className="py-1.5 px-2 bg-red-900/40 hover:bg-red-800/60 border border-red-500/30 text-red-300 rounded-lg font-bold text-[10px] flex items-center gap-1"
+                              >
+                                <ShieldAlert className="w-3 h-3" />
+                                <span>Report Fake Receipt</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
             </div>
           )}
         </div>
+
+        {/* Modal: View Receipt Image */}
+        {viewingReceiptUrl && (
+          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-slate-900 rounded-2xl overflow-hidden border border-slate-800">
+              <div className="p-3 border-b border-slate-800 flex justify-between items-center">
+                <span className="text-xs font-bold text-white">Payment Receipt Image</span>
+                <button
+                  onClick={() => setViewingReceiptUrl(null)}
+                  className="p-1 text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-3 flex justify-center bg-black/60 max-h-[70vh] overflow-auto">
+                <img
+                  src={viewingReceiptUrl}
+                  alt="Receipt Full View"
+                  className="max-w-full rounded-lg object-contain"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Report False Receipt / Embezzlement to Owner */}
+        {disputeModalItem && (
+          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-slate-900 border border-red-500/40 rounded-2xl overflow-hidden shadow-2xl">
+              <div className="p-3.5 bg-red-950/40 border-b border-red-500/30 flex justify-between items-center">
+                <div className="flex items-center gap-2 text-red-400 font-bold text-xs">
+                  <ShieldAlert className="w-4 h-4" />
+                  <span>Report Dispute to Owner</span>
+                </div>
+                <button
+                  onClick={() => setDisputeModalItem(null)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <form onSubmit={handleReportDispute} className="p-4 space-y-3">
+                <p className="text-xs text-slate-300">
+                  This reports this transfer of <b>{disputeModalItem.amount} ETB</b> to the Platform Owner for direct review and audit against Admin embezzlement.
+                </p>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-slate-400">Describe the issue:</label>
+                  <textarea
+                    rows={3}
+                    value={disputeReason}
+                    onChange={(e) => setDisputeReason(e.target.value)}
+                    placeholder="e.g. Funds not credited in Telebirr, or fake SMS slip attached."
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-red-500"
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setDisputeModalItem(null)}
+                    className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold"
+                  >
+                    Submit Dispute Flag
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

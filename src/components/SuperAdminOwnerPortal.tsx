@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, SuperAdmin, AdminCreditRequest, OwnerDailyCut, OwnerDailyCutLotto } from '../lib/supabase';
+import { supabase, SuperAdmin, Admin, AdminCreditRequest, OwnerDailyCut, OwnerDailyCutLotto, UserFinancialRequest } from '../lib/supabase';
 import { parseTransactionMessage } from '../utils/transactionParser';
-import { Crown, ShieldCheck, DollarSign, TrendingUp, CheckCircle, RefreshCw, Sparkles, Send, BarChart3, ArrowRightLeft, Award, History } from 'lucide-react';
+import { Crown, ShieldCheck, DollarSign, TrendingUp, CheckCircle, RefreshCw, Sparkles, Send, BarChart3, ArrowRightLeft, Award, History, Users, UserCheck, UserX, UploadCloud, Eye, ShieldAlert, Key, PlusCircle, X } from 'lucide-react';
+import { triggerHaptic } from '../utils/telegram';
 
 export const SuperAdminOwnerPortal: React.FC = () => {
   const [activeRole, setActiveRole] = useState<'super_admin' | 'owner'>('super_admin');
@@ -15,16 +16,34 @@ export const SuperAdminOwnerPortal: React.FC = () => {
   const [superAdminStatus, setSuperAdminStatus] = useState<string | null>(null);
 
   // Owner state
+  const [adminsList, setAdminsList] = useState<Admin[]>([]);
   const [ownerBingoCuts, setOwnerBingoCuts] = useState<OwnerDailyCut[]>([]);
   const [ownerLottoCuts, setOwnerLottoCuts] = useState<OwnerDailyCutLotto[]>([]);
   const [superBonusPot, setSuperBonusPot] = useState<number>(0);
   const [ownerCreditAmount, setOwnerCreditAmount] = useState<string>('10000');
   const [ownerTxnMessage, setOwnerTxnMessage] = useState<string>('');
   const [ownerParsedTxnId, setOwnerParsedTxnId] = useState<string>('');
+  const [ownerReceiptImage, setOwnerReceiptImage] = useState<string | null>(null);
   const [ownerCreditStatus, setOwnerCreditStatus] = useState<string | null>(null);
-  const [ownerSubTab, setOwnerSubTab] = useState<'treasury' | 'analytics'>('treasury');
+  const [ownerSubTab, setOwnerSubTab] = useState<'treasury' | 'supervision' | 'disputes' | 'analytics'>('treasury');
   const [recentBingoWins, setRecentBingoWins] = useState<any[]>([]);
   const [recentLottoWins, setRecentLottoWins] = useState<any[]>([]);
+
+  // Embezzlement dispute review queue
+  const [disputesList, setDisputesList] = useState<UserFinancialRequest[]>([]);
+  const [disputeResolutionNotes, setDisputeResolutionNotes] = useState<{ [key: string]: string }>({});
+
+  // Master PIN management
+  const [newMasterPin, setNewMasterPin] = useState<string>('');
+  const [pinUpdateStatus, setPinUpdateStatus] = useState<string | null>(null);
+
+  // Modal states
+  const [viewingReceiptUrl, setViewingReceiptUrl] = useState<string | null>(null);
+  const [editAdminModal, setEditAdminModal] = useState<{
+    type: 'admin' | 'super_admin';
+    isNew: boolean;
+    data: any;
+  } | null>(null);
 
   // Load initial super admin data
   useEffect(() => {
@@ -75,13 +94,28 @@ export const SuperAdminOwnerPortal: React.FC = () => {
       .limit(50);
     if (lottoCuts) setOwnerLottoCuts(lottoCuts);
 
-    // 3. Fetch calculated 20% Super Bonus Pot
+    // 3. Fetch calculated 20% Super Bonus Pot (strictly bingo cut)
     const { data: potData } = await supabase.rpc('get_owner_24h_super_bonus_pot');
     if (potData !== null && potData !== undefined) {
       setSuperBonusPot(Number(potData));
     }
 
-    // 4. Fetch Recent Bingo Games Won
+    // 4. Fetch All Admins
+    const { data: admins } = await supabase
+      .from('admins')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (admins) setAdminsList(admins);
+
+    // 5. Fetch Flagged Embezzlement Disputes
+    const { data: flagged } = await supabase
+      .from('user_financial_requests')
+      .select('*')
+      .eq('is_flagged_embezzlement', true)
+      .order('created_at', { ascending: false });
+    if (flagged) setDisputesList(flagged);
+
+    // 6. Fetch Recent Bingo Games Won
     const { data: gamesWon } = await supabase
       .from('games')
       .select('id, room_id, winner_user_id, prize_pool, commission_amount, status, created_at')
@@ -90,7 +124,7 @@ export const SuperAdminOwnerPortal: React.FC = () => {
       .limit(30);
     if (gamesWon) setRecentBingoWins(gamesWon);
 
-    // 5. Fetch Recent Lotto Winners
+    // 7. Fetch Recent Lotto Winners
     const { data: lottoWinners } = await supabase
       .from('daily_lotto_winners')
       .select('id, round_id, rank, telegram_user_id, prize_amount, token_number, created_at')
@@ -102,6 +136,7 @@ export const SuperAdminOwnerPortal: React.FC = () => {
   const handleSuperAdminFulfill = async (requestId: string, action: 'approved' | 'rejected') => {
     if (!selectedSuperAdmin?.id) return;
     setSuperAdminStatus(null);
+    triggerHaptic('medium');
 
     try {
       const { data, error } = await supabase.rpc('super_admin_fulfill_admin_credit', {
@@ -130,17 +165,14 @@ export const SuperAdminOwnerPortal: React.FC = () => {
       setOwnerCreditStatus('Please enter a valid amount.');
       return;
     }
-    if (!ownerParsedTxnId.trim()) {
-      setOwnerCreditStatus('Please confirm transaction ID.');
-      return;
-    }
 
     try {
       const { data, error } = await supabase.rpc('owner_credit_super_admin', {
         p_super_admin_id: selectedSuperAdmin.id,
         p_amount_paid: numAmt,
-        p_confirmation_message: ownerTxnMessage,
-        p_parsed_transaction_id: ownerParsedTxnId.trim().toUpperCase(),
+        p_confirmation_message: ownerTxnMessage || (ownerReceiptImage ? 'Payment slip attached' : 'Owner transfer confirmation'),
+        p_parsed_transaction_id: ownerParsedTxnId.trim().toUpperCase() || 'OWNER-FLOAT',
+        p_receipt_image_url: ownerReceiptImage,
       });
 
       if (error || !data?.success) {
@@ -149,10 +181,96 @@ export const SuperAdminOwnerPortal: React.FC = () => {
         setOwnerCreditStatus(`🎉 Successfully credited ${data.total_float_added} ETB (Includes 10% Extra Bonus: ${data.bonus_credited} ETB) to Super Admin!`);
         setOwnerTxnMessage('');
         setOwnerParsedTxnId('');
+        setOwnerReceiptImage(null);
         loadSuperAdmins();
       }
     } catch (err: any) {
       setOwnerCreditStatus(`Error: ${err?.message}`);
+    }
+  };
+
+  const handleOwnerReceiptChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setOwnerReceiptImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleToggleAdminStatus = async (type: 'admin' | 'super_admin', id: string) => {
+    triggerHaptic('medium');
+    await supabase.rpc('owner_toggle_admin_status', {
+      p_type: type,
+      p_id: id,
+    });
+    loadOwnerData();
+    loadSuperAdmins();
+  };
+
+  const handleResolveDisputeFlag = async (requestId: string) => {
+    triggerHaptic('heavy');
+    const notes = disputeResolutionNotes[requestId] || 'Audited and verified by Owner';
+    await supabase.rpc('owner_resolve_embezzlement_flag', {
+      p_request_id: requestId,
+      p_resolution_notes: notes,
+    });
+    loadOwnerData();
+  };
+
+  const handleSaveAdminData = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editAdminModal) return;
+    triggerHaptic('medium');
+
+    const d = editAdminModal.data;
+    if (editAdminModal.type === 'admin') {
+      await supabase.rpc('owner_manage_admin', {
+        p_id: editAdminModal.isNew ? null : d.id,
+        p_slug: d.slug || 'admin_' + Math.floor(Math.random() * 1000),
+        p_display_name: d.display_name,
+        p_telegram_username: d.telegram_username?.replace(/^@/, '') || '',
+        p_phone: d.phone || '',
+        p_pin_code: d.pin_code || '1234',
+        p_is_active: d.is_active !== undefined ? d.is_active : true,
+        p_float_balance: parseFloat(d.float_balance || 0),
+      });
+    } else {
+      await supabase.rpc('owner_manage_super_admin', {
+        p_id: editAdminModal.isNew ? null : d.id,
+        p_slug: d.slug || 'super_' + Math.floor(Math.random() * 1000),
+        p_display_name: d.display_name,
+        p_telegram_username: d.telegram_username?.replace(/^@/, '') || '',
+        p_pin_code: d.pin_code || '1234',
+        p_is_active: d.is_active !== undefined ? d.is_active : true,
+        p_float_balance: parseFloat(d.float_balance || 0),
+      });
+    }
+
+    setEditAdminModal(null);
+    loadOwnerData();
+    loadSuperAdmins();
+  };
+
+  const handleUpdateMasterPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newMasterPin.length !== 4) {
+      setPinUpdateStatus('PIN must be exactly 4 digits.');
+      return;
+    }
+    triggerHaptic('heavy');
+    const { data, error } = await supabase.rpc('owner_set_master_pin', {
+      p_old_pin: ownerKey,
+      p_new_pin: newMasterPin,
+    });
+
+    if (error || !data?.success) {
+      setPinUpdateStatus(`Failed: ${data?.error || error?.message}`);
+    } else {
+      setPinUpdateStatus('✅ Owner Master PIN updated successfully!');
+      setOwnerKey(newMasterPin);
+      setNewMasterPin('');
     }
   };
 
@@ -280,6 +398,19 @@ export const SuperAdminOwnerPortal: React.FC = () => {
                       </span>
                     </div>
 
+                    {req.receipt_image_url && (
+                      <div className="flex items-center gap-2 pt-1 border-t border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => setViewingReceiptUrl(req.receipt_image_url!)}
+                          className="flex items-center gap-1.5 text-xs text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1.5 rounded-xl border border-amber-500/30"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Admin Payment Receipt</span>
+                        </button>
+                      </div>
+                    )}
+
                     {req.confirmation_message && (
                       <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-[11px] text-slate-300 font-mono">
                         "{req.confirmation_message}"
@@ -318,22 +449,23 @@ export const SuperAdminOwnerPortal: React.FC = () => {
               </div>
               <h3 className="text-base font-black text-white">Owner Security Gate</h3>
               <p className="text-xs text-slate-400">
-                Enter your Owner Passkey to access financial cuts and credit injections.
+                Reserved for Master Owner (@decaphone). Enter 4-Digit Owner Security Key to access.
               </p>
               <input
                 type="password"
+                maxLength={8}
                 value={ownerKey}
                 onChange={(e) => setOwnerKey(e.target.value)}
-                placeholder="Owner Passkey"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-center text-white focus:outline-none focus:border-amber-500"
+                placeholder="4-Digit Owner Key (Default: 7788)"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-center text-white focus:outline-none focus:border-amber-500 font-mono font-bold"
               />
               <button
                 onClick={() => {
-                  if (ownerKey === 'owner' || ownerKey === 'yeaddis_owner' || ownerKey.length >= 4) {
+                  if (ownerKey === '7788' || ownerKey === 'owner' || ownerKey === 'yeaddis_owner' || ownerKey.length >= 4) {
                     setIsOwnerUnlocked(true);
                     loadOwnerData();
                   } else {
-                    alert('Invalid Owner key');
+                    alert('Invalid Owner 4-digit key');
                   }
                 }}
                 className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black rounded-xl text-xs"
@@ -344,30 +476,54 @@ export const SuperAdminOwnerPortal: React.FC = () => {
           ) : (
             <div className="space-y-5">
               {/* Owner Sub-Tab Switcher */}
-              <div className="flex gap-2 p-1 bg-slate-900 border border-slate-800 rounded-2xl">
+              <div className="grid grid-cols-4 gap-1.5 p-1 bg-slate-900 border border-slate-800 rounded-2xl">
                 <button
                   type="button"
                   onClick={() => setOwnerSubTab('treasury')}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                     ownerSubTab === 'treasury'
                       ? 'bg-amber-500 text-slate-950 shadow-md'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <DollarSign className="w-3.5 h-3.5" />
-                  <span>Financial Cuts & Float Injection</span>
+                  <span>Treasury & Float</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOwnerSubTab('supervision')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    ownerSubTab === 'supervision'
+                      ? 'bg-amber-500 text-slate-950 shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Admin Supervision ({adminsList.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOwnerSubTab('disputes')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    ownerSubTab === 'disputes'
+                      ? 'bg-red-500 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Disputes & Flags ({disputesList.length})</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setOwnerSubTab('analytics')}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                     ownerSubTab === 'analytics'
                       ? 'bg-amber-500 text-slate-950 shadow-md'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <BarChart3 className="w-3.5 h-3.5" />
-                  <span>Game Analytics & Credit Movements</span>
+                  <span>Analytics & Win Logs</span>
                 </button>
               </div>
 
@@ -398,17 +554,18 @@ export const SuperAdminOwnerPortal: React.FC = () => {
                 <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-4">
                   <div className="text-[10px] text-purple-400 uppercase font-bold flex items-center gap-1">
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Super Bonus Pot (20% of 24h)</span>
+                    <span>Super Bonus Pot (20% Bingo Cut)</span>
                   </div>
                   <div className="text-xl font-black text-amber-400 mt-1 font-mono">
                     {superBonusPot.toLocaleString()} ETB
                   </div>
-                  <div className="text-[10px] text-slate-400">From 7:00 PM local cycle</div>
+                  <div className="text-[10px] text-slate-400">Strictly bingo cut (lotto ignored)</div>
                 </div>
               </div>
 
-              {ownerSubTab === 'treasury' ? (
-                <>
+              {/* 1. Treasury Subtab */}
+              {ownerSubTab === 'treasury' && (
+                <div className="space-y-4">
                   {/* Credit Super Admin Form (+10% Bonus) */}
                   <form
                     onSubmit={handleOwnerCreditSubmit}
@@ -448,6 +605,30 @@ export const SuperAdminOwnerPortal: React.FC = () => {
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500"
                         />
                       </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-300">Attach Payment Slip</label>
+                        <div className="flex items-center gap-2">
+                          <label className="flex-1 cursor-pointer flex items-center justify-center gap-1.5 py-2 px-3 border border-dashed border-slate-700 hover:border-amber-500 rounded-xl bg-slate-950 text-slate-300 text-xs">
+                            <UploadCloud className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{ownerReceiptImage ? 'Slip Attached' : 'Attach Slip'}</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleOwnerReceiptChange}
+                              className="hidden"
+                            />
+                          </label>
+                          {ownerReceiptImage && (
+                            <img
+                              src={ownerReceiptImage}
+                              alt="Receipt preview"
+                              className="w-9 h-9 object-cover rounded-lg border border-amber-500/50 cursor-pointer"
+                              onClick={() => setViewingReceiptUrl(ownerReceiptImage)}
+                            />
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="space-y-1.5">
@@ -476,6 +657,35 @@ export const SuperAdminOwnerPortal: React.FC = () => {
                       <Send className="w-4 h-4" />
                       <span>Credit Super Admin with 10% Extra Float</span>
                     </button>
+                  </form>
+
+                  {/* Owner Master PIN Update Box */}
+                  <form onSubmit={handleUpdateMasterPin} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-white">
+                      <Key className="w-4 h-4 text-amber-400" />
+                      <span>Update Owner 4-Digit Security Master PIN</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        maxLength={4}
+                        value={newMasterPin}
+                        onChange={(e) => setNewMasterPin(e.target.value)}
+                        placeholder="Enter New 4-Digit PIN"
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-center text-white font-mono font-bold focus:outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl"
+                      >
+                        Change Master PIN
+                      </button>
+                    </div>
+                    {pinUpdateStatus && (
+                      <div className="text-xs text-amber-400 font-medium">
+                        {pinUpdateStatus}
+                      </div>
+                    )}
                   </form>
 
                   {/* Owner Daily Cuts History (Bingo & Lotto) */}
@@ -562,9 +772,242 @@ export const SuperAdminOwnerPortal: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                </>
-              ) : (
-                /* Owner Analytics & Graphical Movement View */
+                </div>
+              )}
+
+              {/* 2. Admin & Super Admin Supervision Subtab */}
+              {ownerSubTab === 'supervision' && (
+                <div className="space-y-4">
+                  {/* Super Admins Management */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Super Admins (Float Hubs)
+                      </h4>
+                      <button
+                        onClick={() =>
+                          setEditAdminModal({
+                            type: 'super_admin',
+                            isNew: true,
+                            data: { display_name: '', telegram_username: '', pin_code: '1234', float_balance: 0, is_active: true },
+                          })
+                        }
+                        className="text-xs text-amber-400 hover:underline flex items-center gap-1 font-bold"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        <span>Add Super Admin</span>
+                      </button>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                          <tr>
+                            <th className="p-2.5">Name</th>
+                            <th className="p-2.5">Telegram</th>
+                            <th className="p-2.5">Float</th>
+                            <th className="p-2.5">PIN</th>
+                            <th className="p-2.5">Status</th>
+                            <th className="p-2.5 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          {superAdmins.map((sa) => (
+                            <tr key={sa.id} className="hover:bg-slate-800/40">
+                              <td className="p-2.5 font-bold text-white">{sa.display_name}</td>
+                              <td className="p-2.5 text-slate-400 font-mono">@{sa.telegram_username}</td>
+                              <td className="p-2.5 font-mono text-emerald-400 font-bold">{sa.float_balance?.toLocaleString()} ETB</td>
+                              <td className="p-2.5 font-mono text-amber-400">{sa.pin_code || '1234'}</td>
+                              <td className="p-2.5">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sa.is_active !== false ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`}>
+                                  {sa.is_active !== false ? 'Active' : 'Suspended'}
+                                </span>
+                              </td>
+                              <td className="p-2.5 text-right space-x-2">
+                                <button
+                                  onClick={() => setEditAdminModal({ type: 'super_admin', isNew: false, data: sa })}
+                                  className="text-[11px] text-amber-400 hover:underline font-bold"
+                                >
+                                  Edit PIN/Float
+                                </button>
+                                <button
+                                  onClick={() => handleToggleAdminStatus('super_admin', sa.id)}
+                                  className={`text-[11px] font-bold ${sa.is_active !== false ? 'text-red-400' : 'text-emerald-400'} hover:underline`}
+                                >
+                                  {sa.is_active !== false ? 'Suspend' : 'Reactivate'}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Regular Admins Management */}
+                  <div className="space-y-2 pt-2">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Participating Admins ({adminsList.length})
+                      </h4>
+                      <button
+                        onClick={() =>
+                          setEditAdminModal({
+                            type: 'admin',
+                            isNew: true,
+                            data: { display_name: '', telegram_username: '', phone: '', pin_code: '1234', float_balance: 0, is_active: true },
+                          })
+                        }
+                        className="text-xs text-amber-400 hover:underline flex items-center gap-1 font-bold"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        <span>Add Admin</span>
+                      </button>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden max-h-72 overflow-y-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                          <tr>
+                            <th className="p-2.5">Name</th>
+                            <th className="p-2.5">Telegram</th>
+                            <th className="p-2.5">Phone</th>
+                            <th className="p-2.5">Float</th>
+                            <th className="p-2.5">PIN</th>
+                            <th className="p-2.5">Status</th>
+                            <th className="p-2.5 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          {adminsList.map((adm) => (
+                            <tr key={adm.id} className="hover:bg-slate-800/40">
+                              <td className="p-2.5 font-bold text-white">{adm.display_name}</td>
+                              <td className="p-2.5 text-slate-400 font-mono">@{adm.telegram_username}</td>
+                              <td className="p-2.5 text-slate-400 font-mono text-[11px]">{adm.phone || 'N/A'}</td>
+                              <td className="p-2.5 font-mono text-emerald-400 font-bold">{adm.float_balance?.toLocaleString()} ETB</td>
+                              <td className="p-2.5 font-mono text-amber-400">{adm.pin_code || '1234'}</td>
+                              <td className="p-2.5">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${adm.is_active !== false ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`}>
+                                  {adm.is_active !== false ? 'Active' : 'Suspended'}
+                                </span>
+                              </td>
+                              <td className="p-2.5 text-right space-x-2">
+                                <button
+                                  onClick={() => setEditAdminModal({ type: 'admin', isNew: false, data: adm })}
+                                  className="text-[11px] text-amber-400 hover:underline font-bold"
+                                >
+                                  Edit PIN/Float
+                                </button>
+                                <button
+                                  onClick={() => handleToggleAdminStatus('admin', adm.id)}
+                                  className={`text-[11px] font-bold ${adm.is_active !== false ? 'text-red-400' : 'text-emerald-400'} hover:underline`}
+                                >
+                                  {adm.is_active !== false ? 'Suspend' : 'Reactivate'}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. Disputes & Embezzlement Queue Subtab */}
+              {ownerSubTab === 'disputes' && (
+                <div className="space-y-3">
+                  <div className="text-xs font-bold text-slate-300">
+                    Disputed Cashouts & False Receipt Reports ({disputesList.length})
+                  </div>
+
+                  {disputesList.length === 0 ? (
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-xs text-slate-500">
+                      No unresolved dispute flags or false receipt reports. All clear!
+                    </div>
+                  ) : (
+                    disputesList.map((item) => (
+                      <div
+                        key={item.id}
+                        className="bg-slate-900 border border-red-500/40 rounded-2xl p-4 space-y-3 shadow-lg"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-red-400 flex items-center gap-1">
+                                <ShieldAlert className="w-3.5 h-3.5" />
+                                <span>Flagged Cashout: {item.amount} ETB</span>
+                              </span>
+                              <span className="text-[10px] bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full font-bold">
+                                User #{item.telegram_user_id}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-300 mt-1">
+                              Payout Account: <b className="font-mono text-white">{item.account_number}</b> ({item.account_name})
+                            </div>
+                            <div className="text-xs text-red-300 mt-1 bg-red-950/40 p-2 rounded-xl border border-red-500/20">
+                              <b>Reported Reason:</b> {item.flag_reason || 'Funds not credited'}
+                            </div>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            {new Date(item.created_at).toLocaleString()}
+                          </span>
+                        </div>
+
+                        {/* Receipts Preview for Owner */}
+                        <div className="flex items-center gap-2 pt-1 border-t border-slate-800">
+                          {item.admin_receipt_image_url && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingReceiptUrl(item.admin_receipt_image_url!)}
+                              className="text-xs text-emerald-400 bg-emerald-500/10 px-2.5 py-1.5 rounded-xl border border-emerald-500/30 flex items-center gap-1"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>View Admin Payout Slip</span>
+                            </button>
+                          )}
+                          {item.receipt_image_url && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingReceiptUrl(item.receipt_image_url!)}
+                              className="text-xs text-amber-400 bg-amber-500/10 px-2.5 py-1.5 rounded-xl border border-amber-500/30 flex items-center gap-1"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>View User Topup Slip</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Resolution Actions */}
+                        <div className="space-y-2 pt-1">
+                          <input
+                            type="text"
+                            placeholder="Resolution notes (e.g. Telebirr SMS verified, false alarm)..."
+                            value={disputeResolutionNotes[item.id] || ''}
+                            onChange={(e) =>
+                              setDisputeResolutionNotes({
+                                ...disputeResolutionNotes,
+                                [item.id]: e.target.value,
+                              })
+                            }
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                          />
+                          <button
+                            onClick={() => handleResolveDisputeFlag(item.id)}
+                            className="w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            <span>Mark Resolved & Remove Flag</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* 4. Analytics & Game Records Subtab */}
+              {ownerSubTab === 'analytics' && (
                 <div className="space-y-5">
                   {/* Credit Movement Architecture Visualizer */}
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
@@ -591,17 +1034,15 @@ export const SuperAdminOwnerPortal: React.FC = () => {
                         <p className="text-[10px] text-slate-400">Approves Cashier; receives 70% of Bingo & 20% of Lotto.</p>
                       </div>
 
-                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-center space-y-1">
-                        <div className="text-[10px] text-purple-400 font-bold uppercase">Layer 3: Super Admin</div>
-                        <div className="text-xs font-bold text-white">Regional Vault</div>
-                        <p className="text-[10px] text-slate-400">Distributes float to Admins; buys credit from Owner.</p>
-                      </div>
+                      <div className="bg-slate-950 border border-purple-400 font-bold uppercase">Layer 3: Super Admin</div>
+                      <div className="text-xs font-bold text-white">Regional Vault</div>
+                      <p className="text-[10px] text-slate-400">Distributes float to Admins; buys credit from Owner.</p>
+                    </div>
 
-                      <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-3 text-center space-y-1">
-                        <div className="text-[10px] text-amber-400 font-bold uppercase">Layer 4: Owner</div>
-                        <div className="text-xs font-bold text-amber-300">Master Treasury</div>
-                        <p className="text-[10px] text-slate-400">+10% Bonus Float Injection; 30% Bingo & 10% Lotto Cuts.</p>
-                      </div>
+                    <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-3 text-center space-y-1">
+                      <div className="text-[10px] text-amber-400 font-bold uppercase">Layer 4: Owner</div>
+                      <div className="text-xs font-bold text-amber-300">Master Treasury</div>
+                      <p className="text-[10px] text-slate-400">+10% Bonus Float Injection; 30% Bingo & 10% Lotto Cuts.</p>
                     </div>
                   </div>
 
@@ -743,6 +1184,154 @@ export const SuperAdminOwnerPortal: React.FC = () => {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal: View Receipt Image */}
+      {viewingReceiptUrl && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-900 rounded-2xl overflow-hidden border border-slate-800">
+            <div className="p-3 border-b border-slate-800 flex justify-between items-center">
+              <span className="text-xs font-bold text-white">Payment Receipt Image</span>
+              <button
+                onClick={() => setViewingReceiptUrl(null)}
+                className="p-1 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 flex justify-center bg-black/60 max-h-[70vh] overflow-auto">
+              <img
+                src={viewingReceiptUrl}
+                alt="Receipt Full View"
+                className="max-w-full rounded-lg object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit / Add Admin or Super Admin */}
+      {editAdminModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="max-w-md w-full bg-slate-900 border border-amber-500/40 rounded-3xl overflow-hidden shadow-2xl">
+            <div className="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+              <div className="flex items-center gap-2 text-sm font-bold text-white">
+                <Crown className="w-4 h-4 text-amber-400" />
+                <span>
+                  {editAdminModal.isNew ? 'Create' : 'Supervise'}{' '}
+                  {editAdminModal.type === 'admin' ? 'Admin' : 'Super Admin'}
+                </span>
+              </div>
+              <button
+                onClick={() => setEditAdminModal(null)}
+                className="p-1 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAdminData} className="p-5 space-y-3.5">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300">Display Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editAdminModal.data.display_name || ''}
+                  onChange={(e) =>
+                    setEditAdminModal({
+                      ...editAdminModal,
+                      data: { ...editAdminModal.data, display_name: e.target.value },
+                    })
+                  }
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300">Telegram Username</label>
+                <input
+                  type="text"
+                  required
+                  value={editAdminModal.data.telegram_username || ''}
+                  onChange={(e) =>
+                    setEditAdminModal({
+                      ...editAdminModal,
+                      data: { ...editAdminModal.data, telegram_username: e.target.value },
+                    })
+                  }
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                />
+              </div>
+
+              {editAdminModal.type === 'admin' && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300">Phone / Telebirr Number</label>
+                  <input
+                    type="text"
+                    value={editAdminModal.data.phone || ''}
+                    onChange={(e) =>
+                      setEditAdminModal({
+                        ...editAdminModal,
+                        data: { ...editAdminModal.data, phone: e.target.value },
+                      })
+                    }
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-amber-400">4-Digit Security PIN</label>
+                  <input
+                    type="text"
+                    maxLength={4}
+                    required
+                    value={editAdminModal.data.pin_code || '1234'}
+                    onChange={(e) =>
+                      setEditAdminModal({
+                        ...editAdminModal,
+                        data: { ...editAdminModal.data, pin_code: e.target.value },
+                      })
+                    }
+                    className="w-full bg-slate-950 border border-amber-500/50 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold text-center"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-emerald-400">Float Balance (ETB)</label>
+                  <input
+                    type="number"
+                    value={editAdminModal.data.float_balance || 0}
+                    onChange={(e) =>
+                      setEditAdminModal({
+                        ...editAdminModal,
+                        data: { ...editAdminModal.data, float_balance: e.target.value },
+                      })
+                    }
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditAdminModal(null)}
+                  className="flex-1 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black rounded-xl text-xs shadow-lg active:scale-98"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

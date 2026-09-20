@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { WagmiProvider } from 'wagmi';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useAccount } from 'wagmi';
@@ -13,6 +13,7 @@ import { GroupSelector, BingoGroup } from './components/GroupSelector';
 import { DailyLottoPage } from './components/DailyLottoPage';
 import { DailySuperBonusLottoPage } from './components/DailySuperBonusLottoPage';
 import { CashierModal } from './components/CashierModal';
+import { NicknameModal } from './components/NicknameModal';
 import { ExternalLink, X } from 'lucide-react';
 
 const Admin = lazy(() => import('./components/Admin').then(module => ({ default: module.Admin })));
@@ -23,6 +24,7 @@ function AppContent() {
   const { address, isConnected } = useAccount();
   const [view, setView] = useState<View>('lobby');
   const [appUser, setAppUser] = useState<TelegramUser | null>(null);
+  const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [gameId, setGameId] = useState<string | null>(() => localStorage.getItem('gameId'));
   const [playerId, setPlayerId] = useState<string | null>(() => localStorage.getItem('playerId'));
   const [gameStarted, setGameStarted] = useState(false);
@@ -44,6 +46,25 @@ function AppContent() {
       setAppUser(telegramData.user);
     }
   }, []);
+
+  // Check if player needs nickname onboarding
+  useEffect(() => {
+    if (!appUser?.id) return;
+    const stored = localStorage.getItem(`user_nickname_${appUser.id}`);
+    if (stored) {
+      if (appUser.first_name !== stored) {
+        setAppUser(prev => prev ? { ...prev, first_name: stored } : prev);
+      }
+      return;
+    }
+    const isGenericName = !appUser.first_name ||
+      appUser.first_name.toLowerCase().includes('user') ||
+      appUser.first_name.toLowerCase().includes('telegram') ||
+      appUser.first_name.length < 2;
+    if (!appUser.username && isGenericName) {
+      setShowNicknameModal(true);
+    }
+  }, [appUser?.id]);
 
   // Fetch 6 active rooms and admins, check deep link params
   useEffect(() => {
@@ -208,42 +229,43 @@ function AppContent() {
   }, []);
 
   // Sync user balance scoped to selectedAdmin
-  useEffect(() => {
+  const loadUserBalance = useCallback(async () => {
     if (!appUser?.id) return;
-    const loadUserBalance = async () => {
-      if (selectedAdmin?.id) {
-        const { data: wallet } = await supabase
-          .from('admin_user_wallets')
-          .select('deposited_balance, won_balance')
-          .eq('telegram_user_id', appUser.id)
-          .eq('admin_id', selectedAdmin.id)
-          .maybeSingle();
-
-        if (wallet) {
-          setDepositedBalance(wallet.deposited_balance || 0);
-          setWonBalance(wallet.won_balance || 0);
-          const total = (wallet.deposited_balance || 0) + (wallet.won_balance || 0);
-          setUserBalance(total);
-          return;
-        }
-      }
-
-      // Legacy fallback
-      const { data } = await supabase
-        .from('telegram_users')
-        .select('balance, deposited_balance, won_balance')
+    if (selectedAdmin?.id) {
+      const { data: wallet } = await supabase
+        .from('admin_user_wallets')
+        .select('deposited_balance, won_balance')
         .eq('telegram_user_id', appUser.id)
+        .eq('admin_id', selectedAdmin.id)
         .maybeSingle();
 
-      if (data) {
-        setDepositedBalance(data.deposited_balance || 0);
-        setWonBalance(data.won_balance || 0);
-        const total = (data.deposited_balance || 0) + (data.won_balance || 0) || data.balance || 0;
+      if (wallet) {
+        setDepositedBalance(wallet.deposited_balance || 0);
+        setWonBalance(wallet.won_balance || 0);
+        const total = (wallet.deposited_balance || 0) + (wallet.won_balance || 0);
         setUserBalance(total);
+        return;
       }
-    };
-    loadUserBalance();
+    }
+
+    // Legacy fallback
+    const { data } = await supabase
+      .from('telegram_users')
+      .select('balance, deposited_balance, won_balance')
+      .eq('telegram_user_id', appUser.id)
+      .maybeSingle();
+
+    if (data) {
+      setDepositedBalance(data.deposited_balance || 0);
+      setWonBalance(data.won_balance || 0);
+      const total = (data.deposited_balance || 0) + (data.won_balance || 0) || data.balance || 0;
+      setUserBalance(total);
+    }
   }, [appUser?.id, selectedAdmin]);
+
+  useEffect(() => {
+    loadUserBalance();
+  }, [loadUserBalance]);
 
   useEffect(() => {
     if (appUser || !isConnected || !address || walletRegistered.current) return;
@@ -542,8 +564,10 @@ function AppContent() {
     );
   }
 
+  let mainContent = null;
+
   if (view === 'daily_lotto') {
-    return (
+    mainContent = (
       <DailyLottoPage
         currentAdmin={selectedAdmin}
         telegramUserId={appUser?.id || 123456789}
@@ -552,10 +576,8 @@ function AppContent() {
         onBackToLobby={() => setView('lobby')}
       />
     );
-  }
-
-  if (view === 'super_bonus') {
-    return (
+  } else if (view === 'super_bonus') {
+    mainContent = (
       <DailySuperBonusLottoPage
         telegramUserId={appUser?.id || 123456789}
         userBalance={userBalance}
@@ -563,10 +585,8 @@ function AppContent() {
         onBackToLobby={() => setView('lobby')}
       />
     );
-  }
-
-  if (!selectedGroup && view === 'lobby' && !gameStarted) {
-    return (
+  } else if (!selectedGroup && view === 'lobby' && !gameStarted) {
+    mainContent = (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between">
         <GroupSelector
           groups={groups}
@@ -630,13 +650,10 @@ function AppContent() {
             </div>
           </div>
         )}
-        <NetworkQualityIndicator />
       </div>
     );
-  }
-
-  return (
-    <>
+  } else {
+    mainContent = (
       <Lobby
         onJoinGame={handleJoinGame}
         onSpectateGame={handleSpectateGame}
@@ -645,6 +662,12 @@ function AppContent() {
         selectedAdmin={selectedAdmin}
         onSwitchRoom={() => setSelectedGroup(null)}
       />
+    );
+  }
+
+  return (
+    <>
+      {mainContent}
       {appUser && (
         <WalletDepositModal
           isOpen={showDepositModal}
@@ -661,8 +684,16 @@ function AppContent() {
         userBalance={userBalance}
         wonBalance={wonBalance}
         depositedBalance={depositedBalance}
-        onBalanceUpdated={() => {
-          // Re-sync balance
+        onBalanceUpdated={loadUserBalance}
+      />
+      <NicknameModal
+        isOpen={showNicknameModal}
+        telegramUserId={appUser?.id || 123456789}
+        onSaved={(nickname) => {
+          if (appUser) {
+            setAppUser({ ...appUser, first_name: nickname });
+          }
+          setShowNicknameModal(false);
         }}
       />
       <NetworkQualityIndicator />

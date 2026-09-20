@@ -163,8 +163,8 @@ export const DailyLottoPage: React.FC<DailyLottoPageProps> = ({
               <Ticket className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-black text-white text-base">Buy Addis Daily Lotto Tokens</h3>
-              <p className="text-[11px] text-slate-400">100 ETB / Token • 70% to Pot • 20% to Agent • 10% to Owner</p>
+              <h3 className="font-black text-white text-base">የአዲስ ዕለታዊ ሎቶ እጣዎችን ይግዙ</h3>
+              <p className="text-[11px] text-slate-400">100 ብር በአንድ እጣ • 70% ወደ ካዝና • 20% ለወኪል • 10% ለባለቤት</p>
             </div>
           </div>
         </div>
@@ -185,7 +185,7 @@ export const DailyLottoPage: React.FC<DailyLottoPageProps> = ({
                   : 'border-slate-800 bg-slate-950 text-slate-400 hover:text-white'
               }`}
             >
-              <div className="text-xs font-black">{count} {count === 1 ? 'Token' : 'Tokens'}</div>
+              <div className="text-xs font-black">{count} {count === 1 ? 'እጣ' : 'እጣዎች'}</div>
               <div className="text-[10px] text-amber-400 font-bold">{count * 100} ETB</div>
             </button>
           ))}
@@ -207,16 +207,16 @@ export const DailyLottoPage: React.FC<DailyLottoPageProps> = ({
           }`}
         >
           {userBalance >= selectedTokensCount * 100 ? (
-            <span>Buy {selectedTokensCount} Token(s) • {selectedTokensCount * 100} ETB</span>
+            <span>{selectedTokensCount} እጣ(ዎች) ግዛ • {selectedTokensCount * 100} ETB</span>
           ) : (
-            <span>Top Up {selectedTokensCount * 100 - userBalance} ETB to Purchase</span>
+            <span>ለመግዛት {selectedTokensCount * 100 - userBalance} ETB ቀሪ ሂሳብ ይሙሉ</span>
           )}
         </button>
       </div>
 
       {/* Live Interactive Mega Circle Component */}
       <MegaCircleLotto
-        title="Addis Daily Lotto (6:00 PM Draw)"
+        title="የአዲስ ዕለታዊ ሎቶ (ማታ 12 ሰአት)"
         tokens={tokens}
         totalPot={totalPot}
         drawTime={drawTime}

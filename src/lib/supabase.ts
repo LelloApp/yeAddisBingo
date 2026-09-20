@@ -75,6 +75,8 @@ export interface Admin {
   commission_rate?: number;
   float_balance?: number;
   phone?: string;
+  pin_code?: string;
+  is_active?: boolean;
 }
 
 export interface GameCatalogItem {
@@ -170,6 +172,7 @@ export interface SuperAdmin {
   username: string;
   display_name: string;
   phone?: string;
+  pin_code?: string;
   float_balance: number;
   is_active: boolean;
   created_at: string;
@@ -183,7 +186,8 @@ export interface SuperAdminCreditPurchase {
   bonus_amount: number;
   total_credit_received: number;
   confirmation_message: string;
-  parsed_transaction_id: string;
+  parsed_transaction_id?: string;
+  receipt_image_url?: string;
   status: 'pending' | 'approved' | 'rejected';
   notes?: string;
   created_at: string;
@@ -196,7 +200,8 @@ export interface AdminCreditRequest {
   super_admin_id?: string;
   amount: number;
   confirmation_message: string;
-  parsed_transaction_id: string;
+  parsed_transaction_id?: string;
+  receipt_image_url?: string;
   status: 'pending' | 'approved' | 'rejected';
   notes?: string;
   created_at: string;
@@ -215,8 +220,16 @@ export interface UserFinancialRequest {
   account_name?: string;
   confirmation_message?: string;
   parsed_transaction_id?: string;
+  receipt_image_url?: string;
   admin_confirmation_message?: string;
   admin_transaction_id?: string;
+  admin_receipt_image_url?: string;
+  user_confirmed_cashout?: boolean;
+  is_flagged_embezzlement?: boolean;
+  flag_reason?: string;
+  flag_reported_by?: number;
+  flag_resolved_at?: string;
+  flag_resolution_notes?: string;
   status: 'pending' | 'approved' | 'rejected';
   notes?: string;
   created_at: string;
