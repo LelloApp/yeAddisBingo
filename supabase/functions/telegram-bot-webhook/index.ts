@@ -113,24 +113,31 @@ async function getGamesCatalog(supabaseClient: any) {
   return [
     {
       id: "bingo",
-      title: "🎯 Addis Bingo",
+      title: "🎯 ቢንጎ (Addis Bingo)",
       badge: "🔥 LIVE",
       status: "active",
-      description: "Live multiplayer bingo with instant cash prizes",
+      description: "ፈጣን እና አስተማማኝ የቀጥታ ቢንጎ ጨዋታ ከእውነተኛ አሸናፊዎች ጋር",
     },
     {
       id: "quiz",
-      title: "🧠 Addis Quiz Arena",
-      badge: "⏳ COMING SOON",
+      title: "🧠 የቀኑ ጥያቄዎች (Addis Quiz)",
+      badge: "⏳ በቅርቡ",
       status: "coming_soon",
-      description: "Real-time quiz challenges and speed trivia battles",
+      description: "የእውቀት ውድድር እና ፈጣን የጥያቄና መልስ ጨዋታ",
     },
     {
       id: "daily_lotto",
-      title: "🎟️ Addis Daily Lotto",
-      badge: "🔥 5 ETB / TOKEN",
+      title: "🎟️ የአዲስ ዕለታዊ ሎቶ (ማታ 12 ሰአት)",
+      badge: "🗄️ 100 ETB / እጣ",
       status: "active",
-      description: "12-hour morning to evening draw: 5 ETB per token with 100% pot payout (<5 players) or 10% winner admin commission",
+      description: "በየቀኑ ማታ 12 ሰአት የሚወጣ ታላቅ ዕለታዊ ሎቶ (1 እጣ = 100 ብር)",
+    },
+    {
+      id: "super_bonus",
+      title: "🌟 ሱፐር ቦነስ ሎቶ (ማታ 1 ሰአት)",
+      badge: "🏆 ልዩ ካዝና",
+      status: "active",
+      description: "በየቀኑ ማታ 1 ሰአት የሚወጣ ሱፐር ቦነስ ሎቶ ለእለቱ አሸናፊዎች",
     },
   ];
 }
@@ -138,20 +145,20 @@ async function getGamesCatalog(supabaseClient: any) {
 function buildGamesKeyboard(games: any[]) {
   const keyboard: any[][] = games.map((g: any) => [
     {
-      text: `${g.title} • ${g.badge || (g.status === 'active' ? '🔥 LIVE' : '⏳ SOON')}`,
+      text: `${g.title} • ${g.badge || (g.status === 'active' ? '🔥 LIVE' : '⏳ በቅርቡ')}`,
       callback_data: `choose_game:${g.id}`,
     },
   ]);
 
   keyboard.push([
-    { text: "💰 My Balances", callback_data: "check_balance" },
-    { text: "🎁 Invite Friends", callback_data: "show_invite" },
+    { text: "💰 ገቢ ወጪ (Credits / Wallet)", callback_data: "check_balance" },
+    { text: "🎁 ጓደኛ ይጋብዙ (Invite)", callback_data: "show_invite" },
   ]);
 
   return { inline_keyboard: keyboard };
 }
 
-// 2. Fetch the 6 Bingo Rooms (5 ETB, 10 ETB, 15 ETB, 20 ETB, 50 ETB, 100 ETB)
+// 2. Fetch the 6 Bingo Rooms (ችግኝ 5, ጀማሪ 10, ዱብዱብ 15, ክላሲክ 25, VIP ዳይመንድ 50, VIP ዘውድ 100)
 async function getBingoRooms(supabaseClient: any) {
   try {
     const { data, error } = await supabaseClient
@@ -171,7 +178,7 @@ async function getBingoRooms(supabaseClient: any) {
     {
       id: "beginner_room",
       slug: "beginner_room",
-      name: "🌱 Beginner Room (5 ETB)",
+      name: "🌱 ችግኝ (5 ETB)",
       theme_icon: "🌱",
       stake_amount: 5,
       min_balance: 5,
@@ -180,7 +187,7 @@ async function getBingoRooms(supabaseClient: any) {
     {
       id: "starter_room",
       slug: "starter_room",
-      name: "🎯 Starter Room (10 ETB)",
+      name: "🎯 ጀማሪ (10 ETB)",
       theme_icon: "🎯",
       stake_amount: 10,
       min_balance: 10,
@@ -189,7 +196,7 @@ async function getBingoRooms(supabaseClient: any) {
     {
       id: "standard_room",
       slug: "standard_room",
-      name: "🎲 Standard Room (15 ETB)",
+      name: "🎲 ዱብዱብ (15 ETB)",
       theme_icon: "🎲",
       stake_amount: 15,
       min_balance: 15,
@@ -198,16 +205,16 @@ async function getBingoRooms(supabaseClient: any) {
     {
       id: "addis_classic",
       slug: "addis_classic",
-      name: "🏆 Addis Classic (20 ETB)",
+      name: "🏆 ክላሲክ (25 ETB)",
       theme_icon: "🏆",
-      stake_amount: 20,
-      min_balance: 20,
+      stake_amount: 25,
+      min_balance: 25,
       display_online_count: 30,
     },
     {
       id: "vip_diamond",
       slug: "vip_diamond",
-      name: "💎 VIP Diamond (50 ETB)",
+      name: "💎 VIP ዳይመንድ (50 ETB)",
       theme_icon: "💎",
       stake_amount: 50,
       min_balance: 50,
@@ -216,7 +223,7 @@ async function getBingoRooms(supabaseClient: any) {
     {
       id: "high_roller",
       slug: "high_roller",
-      name: "👑 High Roller (100 ETB)",
+      name: "👑 VIP ዘውድ (100 ETB)",
       theme_icon: "👑",
       stake_amount: 100,
       min_balance: 100,
@@ -228,14 +235,14 @@ async function getBingoRooms(supabaseClient: any) {
 function buildRoomsKeyboard(rooms: any[]) {
   const keyboard: any[][] = rooms.map((r: any) => [
     {
-      text: `${r.name} • ${r.display_online_count || 20} online`,
+      text: `${r.name} • ${r.display_online_count || 20} በመስመር ላይ`,
       callback_data: `pick_room:${r.slug || r.id}`,
     },
   ]);
 
   keyboard.push([
-    { text: "🔙 Back to Games", callback_data: "back_to_games" },
-    { text: "💰 Check Balance", callback_data: "check_balance" },
+    { text: "🔙 ወደ ዋና ማውጫ (Main Menu)", callback_data: "back_to_games" },
+    { text: "💰 ሂሳብ ይመልከቱ (Balance)", callback_data: "check_balance" },
   ]);
 
   return { inline_keyboard: keyboard };
@@ -376,10 +383,11 @@ Deno.serve(async (req: Request) => {
           await sendTelegramMessage(
             botToken,
             chatId,
-            `🎯 <b>Addis Bingo Live Rooms</b>\n\n` +
-            `Choose your preferred room stake tier:\n` +
-            `• Up to 400 players can join across all rooms!\n` +
-            `• Fast automated rounds with instant payouts.`,
+            `🎯 <b>የአዲስ ቢንጎ የቀጥታ ክፍሎች (Addis Bingo)</b>\n\n` +
+            `ለመጫወት የሚፈልጉትን የክፍል መደብ ይምረጡ:\n` +
+            `• በአንድ ጊዜ እስከ 400 ተጫዋቾች ይሳተፋሉ!\n` +
+            `• ፈጣን አሸናፊ እና ፈጣን ክፍያ።\n` +
+            `• 5 እና ከዚያ በላይ ተጫዋቾች ሲኖሩ 10% የአስተዳዳሪ ኮሚሽን ይቀነሳል፣ ካልሆነ 100% ካዝናው ለአሸናፊው ይሰጣል።`,
             buildRoomsKeyboard(rooms)
           );
           await answerCallbackQuery(botToken, callbackQuery.id);
@@ -387,7 +395,7 @@ Deno.serve(async (req: Request) => {
           await answerCallbackQuery(
             botToken,
             callbackQuery.id,
-            "🧠 Addis Quiz Arena is launching soon! Stay tuned for trivia battles with cash prizes.",
+            "🧠 የቀኑ ጥያቄዎች (Addis Quiz Arena) በቅርቡ ይጀምራል! በጥያቄና መልስ ተወዳድረው የገንዘብ ሽልማት ያሸንፉ።",
             true
           );
         } else if (selectedGame === "daily_lotto") {
@@ -406,27 +414,61 @@ Deno.serve(async (req: Request) => {
           await sendTelegramMessage(
             botToken,
             chatId,
-            `🎟️ <b>ADDIS DAILY LOTTO (Round #${roundNum})</b>\n\n` +
-            `⏰ <b>12-Hour Morning to Evening Draw</b>\n` +
-            `• <b>1 Token = 5 ETB</b> (Buy multiples of 5 ETB for multiple ticket IDs!)\n` +
-            `• Current Pot: <b>${pot} ETB</b> (${tickets} tickets entered)\n\n` +
-            `💡 <b>Fair Play Rules:</b>\n` +
-            `• If players &lt; 5: <b>Winner takes 100% pot</b> (0% admin fee)!\n` +
-            `• If 5+ players: 10% commission goes to the admin of the winning user.\n\n` +
-            `Select how many tokens to buy from your balance:`,
+            `🎟️ <b>የአዲስ ዕለታዊ ሎቶ (ማታ 12 ሰአት) - ዙር #${roundNum}</b>\n\n` +
+            `⏰ <b>የዕጣ ማውጫ ሰዓት: በየቀኑ ማታ 12 ሰአት (6:00 PM)</b>\n` +
+            `• <b>1 እጣ = 100 ብር</b> (ተጨማሪ እጣዎችን በመግዛት የማሸነፍ እድልዎን ያሳድጉ!)\n` +
+            `• 🗄️ የወቅቱ ካዝና (Pot): <b>${pot} ብር</b> (${tickets} እጣዎች ተሳትፈዋል)\n\n` +
+            `💡 <b>የጨዋታ ህጎች:</b>\n` +
+            `• ተጫዋቾች ከ 5 በታች ከሆኑ: <b>አሸናፊው 100% ካዝናውን ይወስዳል</b> (0% የአስተዳዳሪ ክፍያ)!\n` +
+            `• 5 እና በላይ ተጫዋቾች ከሆኑ: 10% ኮሚሽን ለአስተዳዳሪ ይሰጣል።\n\n` +
+            `ከሂሳብዎ የሚገዙትን የእጣ መጠን ይምረጡ:`,
             {
               inline_keyboard: [
                 [
-                  { text: "🎟️ 1 Token (5 ETB)", callback_data: "lotto_buy:5" },
-                  { text: "🎟️ 2 Tokens (10 ETB)", callback_data: "lotto_buy:10" }
+                  { text: "🎟️ 1 እጣ (100 ETB)", callback_data: "lotto_buy:100" },
+                  { text: "🎟️ 2 እጣዎች (200 ETB)", callback_data: "lotto_buy:200" }
                 ],
                 [
-                  { text: "🎟️ 5 Tokens (25 ETB)", callback_data: "lotto_buy:25" },
-                  { text: "🎟️ 10 Tokens (50 ETB)", callback_data: "lotto_buy:50" }
+                  { text: "🎟️ 5 እጣዎች (500 ETB)", callback_data: "lotto_buy:500" },
+                  { text: "🎟️ 10 እጣዎች (1000 ETB)", callback_data: "lotto_buy:1000" }
                 ],
                 [
-                  { text: "🎮 Open Game App", web_app: { url: appUrl } }
+                  { text: "🎮 ጨዋታውን ይክፈቱ (Open Web App)", web_app: { url: appUrl } },
+                  { text: "🔙 ወደ ዋና ማውጫ", callback_data: "back_to_games" }
                 ]
+              ]
+            }
+          );
+          await answerCallbackQuery(botToken, callbackQuery.id);
+        } else if (selectedGame === "super_bonus") {
+          const { data: potData } = await supabaseClient.rpc("get_owner_24h_super_bonus_pot");
+          const superPot = potData || 0;
+
+          const { data: userTokens } = await supabaseClient
+            .from("daily_lotto_super_bonus_tokens")
+            .select("token_count")
+            .eq("telegram_user_id", user.id)
+            .gte("earned_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString());
+
+          const myTokens = userTokens?.reduce((sum: number, t: any) => sum + (t.token_count || 1), 0) || 0;
+
+          await sendTelegramMessage(
+            botToken,
+            chatId,
+            `🌟 <b>ሱፐር ቦነስ ሎቶ (ማታ 1 ሰአት)</b>\n\n` +
+            `⏰ <b>የዕጣ ማውጫ ሰዓት: በየቀኑ ማታ 1 ሰአት (7:00 PM)</b>\n` +
+            `• 🗄️ የ24 ሰአት የተጠራቀመ ካዝና: <b>${Number(superPot).toFixed(2)} ብር</b>\n` +
+            `• 🎟️ የርስዎ የዛሬ እጣዎች: <b>${myTokens} እጣዎች</b>\n\n` +
+            `💡 <b>የእጣ አሰጣጥ ህግ:</b>\n` +
+            `• በ 25 ETB (ክላሲክ) ሲያሸንፉ (ተጫዋቾች >= 12): <b>1 እጣ</b>\n` +
+            `• በ 50 ETB (VIP ዳይመንድ) ሲያሸንፉ (ተጫዋቾች >= 12): <b>2 እጣዎች</b>\n` +
+            `• በ 100 ETB (VIP ዘውድ) ሲያሸንፉ (ተጫዋቾች >= 12): <b>4 እጣዎች</b>\n\n` +
+            `በቀጥታ በቢንጎ ተሳትፈው እጣዎችን ይሰብስቡ!`,
+            {
+              inline_keyboard: [
+                [{ text: "🎯 ቢንጎ ተጫወቱ (Play Bingo)", callback_data: "choose_game:bingo" }],
+                [{ text: "🎮 ዌብ መተግበሪያ (Web App)", web_app: { url: appUrl } }],
+                [{ text: "🔙 ወደ ዋና ማውጫ", callback_data: "back_to_games" }],
               ]
             }
           );
@@ -460,16 +502,16 @@ Deno.serve(async (req: Request) => {
           const errMsg = buyRes?.error || buyErr?.message || "Failed to purchase lotto tokens";
           await answerCallbackQuery(botToken, callbackQuery.id, `⚠️ ${errMsg}`, true);
         } else {
-          await answerCallbackQuery(botToken, callbackQuery.id, `🎉 Bought ${buyRes.tokens_bought} ticket(s)!`, true);
+          await answerCallbackQuery(botToken, callbackQuery.id, `🎉 ${buyRes.tokens_bought} እጣዎች በተሳካ ሁኔታ ተገዝተዋል!`, true);
           await sendTelegramMessage(
             botToken,
             chatId,
-            `🎟️ <b>Daily Lotto Tickets Confirmed!</b>\n\n` +
-            `• Tokens: <b>${buyRes.tokens_bought}</b> (${buyRes.stake_amount} ETB)\n` +
-            `• Your Ticket Numbers: <b>${buyRes.ticket_numbers.map((n: number) => `#${n}`).join(", ")}</b>\n` +
-            `• Round: <b>#${buyRes.round_number}</b>\n` +
-            `• Closes at: <b>${new Date(buyRes.closes_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</b>\n\n` +
-            `Good luck! The draw takes place this evening.`
+            `🎟️ <b>የዕለታዊ ሎቶ እጣዎች ተረጋግጠዋል!</b>\n\n` +
+            `• የተገዙ እጣዎች: <b>${buyRes.tokens_bought}</b> (${buyRes.stake_amount} ETB)\n` +
+            `• የእጣ ቁጥሮችዎ: <b>${buyRes.ticket_numbers.map((n: number) => `#${n}`).join(", ")}</b>\n` +
+            `• ዙር: <b>#${buyRes.round_number}</b>\n` +
+            `• የዕጣ ማውጫ ሰዓት: <b>ማታ 12 ሰአት (6:00 PM)</b>\n\n` +
+            `መልካም እድል! እጣው ዛሬ ማታ 12 ሰአት ይወጣል።`
           );
         }
       }
@@ -1078,20 +1120,285 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // ==========================================
+    // Owner Commands (@decaphone)
+    // ==========================================
+    const isOwner = user.username && user.username.toLowerCase() === "decaphone";
+
+    // Command: /owner or /owner_reports
+    if (text.startsWith("/owner") || text.startsWith("/owner_reports")) {
+      if (!isOwner) {
+        await sendTelegramMessage(botToken, chatId, "❌ Unauthorized. This command is restricted to the platform Owner (@decaphone).");
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // 1. Fetch 24h Super Bonus Pot (strictly 20% of owner daily bingo cuts)
+      const { data: superPot } = await supabaseClient.rpc("get_owner_24h_super_bonus_pot");
+      
+      // 2. Fetch today's owner cuts
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const { data: bingoCuts } = await supabaseClient
+        .from("owner_daily_cuts")
+        .select("owner_cut_amount")
+        .gte("created_at", todayStart.toISOString());
+      const totalBingoCut = (bingoCuts || []).reduce((acc: number, c: any) => acc + Number(c.owner_cut_amount || 0), 0);
+
+      const { data: lottoCuts } = await supabaseClient
+        .from("owner_daily_cut_lotto")
+        .select("owner_cut_amount")
+        .gte("created_at", todayStart.toISOString());
+      const totalLottoCut = (lottoCuts || []).reduce((acc: number, c: any) => acc + Number(c.owner_cut_amount || 0), 0);
+
+      // 3. Admins & Super Admins counts
+      const { count: adminCount } = await supabaseClient.from("admins").select("*", { count: "exact", head: true }).eq("is_active", true);
+      const { count: superAdminCount } = await supabaseClient.from("super_admins").select("*", { count: "exact", head: true }).eq("is_active", true);
+
+      // 4. Disputes count
+      const { count: disputeCount } = await supabaseClient
+        .from("user_financial_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("is_flagged_embezzlement", true);
+
+      await sendTelegramMessage(
+        botToken,
+        chatId,
+        `👑 <b>MASTER OWNER PORTAL (@decaphone)</b>\n\n` +
+        `📅 <b>የዛሬው የኦውነር ገቢ (Today's Platform Revenue):</b>\n` +
+        `• 🎲 ቢንጎ 30% ድርሻ: <b>${totalBingoCut.toFixed(2)} ETB</b>\n` +
+        `• 🎟️ ዕለታዊ ሎቶ 30% ድርሻ: <b>${totalLottoCut.toFixed(2)} ETB</b>\n` +
+        `• 🌟 24-ሰአት ሱፐር ቦነስ ካዝና (20%): <b>${Number(superPot || 0).toFixed(2)} ETB</b>\n\n` +
+        `👥 <b>አስተዳዳሪዎች (Admin Supervision):</b>\n` +
+        `• ንቁ ሱፐር አድሚኖች: <b>${superAdminCount || 0}</b>\n` +
+        `• ንቁ አድሚኖች: <b>${adminCount || 0}</b>\n` +
+        `• ⚠️ የተጠረጠሩ ክፍያዎች (Disputes Queue): <b>${disputeCount || 0} ሪፖርቶች</b>\n\n` +
+        `💡 <b>የኦውነር ትዕዛዞች (Owner Commands):</b>\n` +
+        `• <code>/disputes</code> - አጠራጣሪ ክፍያዎችን ለመመልከት\n` +
+        `• <code>/resolve_flag &lt;id&gt; &lt;notes&gt;</code> - ሪፖርቱን ለማጽዳት\n` +
+        `• <code>/suspend_admin &lt;slug&gt;</code> - አድሚንን ለማገድ\n` +
+        `• <code>/activate_admin &lt;slug&gt;</code> - የታገደውን ለመመለስ\n` +
+        `• <code>/owner_pin &lt;4-digits&gt;</code> - የኦውነር ማስተር ቁልፍ ለመቀየር`
+      );
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Command: /disputes (Owner Review Disputes Queue)
+    if (text.startsWith("/disputes")) {
+      if (!isOwner) {
+        await sendTelegramMessage(botToken, chatId, "❌ Unauthorized. Restricted to Owner (@decaphone).");
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: disputes } = await supabaseClient
+        .from("user_financial_requests")
+        .select("id, telegram_user_id, amount, flag_reason, flag_reported_by, created_at")
+        .eq("is_flagged_embezzlement", true)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (!disputes || disputes.length === 0) {
+        await sendTelegramMessage(botToken, chatId, "✅ በአሁኑ ሰዓት የተጠረጠረ ወይም ሪፖርት የተደረገ የክፍያ ማጭበርበር የለም (No pending disputes)!");
+      } else {
+        let msg = `⚠️ <b>የተጠረጠሩ ክፍያዎች ዝርዝር (${disputes.length}):</b>\n\n`;
+        for (const d of disputes) {
+          msg += `• <b>ID:</b> <code>${d.id}</code>\n`;
+          msg += `  ተጫዋች: <code>${d.telegram_user_id}</code> | መጠን: <b>${d.amount} ETB</b>\n`;
+          msg += `  ምክንያት: <i>${d.flag_reason || "ሃሰተኛ ደረሰኝ"}</i>\n`;
+          msg += `  ለመፍታት: <code>/resolve_flag ${d.id} የተስተካከለ</code>\n\n`;
+        }
+        await sendTelegramMessage(botToken, chatId, msg);
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Command: /resolve_flag <request_id> <notes>
+    if (text.startsWith("/resolve_flag")) {
+      if (!isOwner) {
+        await sendTelegramMessage(botToken, chatId, "❌ Unauthorized. Restricted to Owner (@decaphone).");
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const parts = text.split(" ");
+      if (parts.length < 2) {
+        await sendTelegramMessage(botToken, chatId, "ℹ️ Usage: <code>/resolve_flag &lt;request_id&gt; [notes]</code>");
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const reqId = parts[1];
+      const notes = parts.slice(2).join(" ") || "Resolved by Owner via Bot";
+
+      const { data: resData, error: resErr } = await supabaseClient.rpc("owner_resolve_embezzlement_flag", {
+        p_request_id: reqId,
+        p_resolution_notes: notes,
+      });
+
+      if (resErr || !resData?.success) {
+        await sendTelegramMessage(botToken, chatId, `❌ ስህተት ተፈጥሯል: ${resErr?.message || resData?.error}`);
+      } else {
+        await sendTelegramMessage(botToken, chatId, `✅ ሪፖርቱ በተሳካ ሁኔታ ተፈትቷል (Dispute Flag Resolved)!`);
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Command: /suspend_admin <slug> or /activate_admin <slug>
+    if (text.startsWith("/suspend_admin") || text.startsWith("/activate_admin")) {
+      if (!isOwner) {
+        await sendTelegramMessage(botToken, chatId, "❌ Unauthorized. Restricted to Owner (@decaphone).");
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const isSuspend = text.startsWith("/suspend_admin");
+      const parts = text.split(" ");
+      if (parts.length < 2) {
+        await sendTelegramMessage(botToken, chatId, `ℹ️ Usage: <code>${parts[0]} &lt;admin_slug_or_id&gt;</code>`);
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const adminSlug = parts[1];
+      const { data: togRes, error: togErr } = await supabaseClient.rpc("owner_toggle_admin_status", {
+        p_target_id: adminSlug,
+        p_is_super: false,
+        p_is_active: !isSuspend,
+      });
+
+      if (togErr || !togRes?.success) {
+        await sendTelegramMessage(botToken, chatId, `❌ ስህተት ተፈጥሯል: ${togErr?.message || togRes?.error}`);
+      } else {
+        const actionLabel = isSuspend ? "ታግዷል (Suspended)" : "ዳግም ተፈቅዷል (Reactivated)";
+        await sendTelegramMessage(botToken, chatId, `✅ አድሚን <b>${adminSlug}</b> ${actionLabel}!`);
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Command: /owner_pin <new_pin>
+    if (text.startsWith("/owner_pin")) {
+      if (!isOwner) {
+        await sendTelegramMessage(botToken, chatId, "❌ Unauthorized. Restricted to Owner (@decaphone).");
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const parts = text.split(" ");
+      if (parts.length < 2 || parts[1].length !== 4) {
+        await sendTelegramMessage(botToken, chatId, "ℹ️ Usage: <code>/owner_pin &lt;4-digit PIN&gt;</code>");
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const newPin = parts[1];
+      const { data: pinRes, error: pinErr } = await supabaseClient.rpc("owner_set_master_pin", {
+        p_new_pin: newPin,
+      });
+
+      if (pinErr || !pinRes?.success) {
+        await sendTelegramMessage(botToken, chatId, `❌ ስህተት: ${pinErr?.message || pinRes?.error}`);
+      } else {
+        await sendTelegramMessage(botToken, chatId, `✅ የኦውነር ማስተር 4-ዲጂት ፒን ተቀይሯል!`);
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Command: /superadmin
+    if (text.startsWith("/superadmin")) {
+      const { data: superAdmin } = await supabaseClient
+        .from("super_admins")
+        .select("*")
+        .or(`telegram_user_id.eq.${user.id},telegram_username.ilike.${user.username || 'NONE'}`)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (!superAdmin && !isOwner) {
+        await sendTelegramMessage(botToken, chatId, "❌ Unauthorized. Only registered Super Admins can access this command.");
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: underAdmins } = await supabaseClient
+        .from("admins")
+        .select("display_name, telegram_username, float_balance, is_active")
+        .eq("super_admin_id", superAdmin?.id || "");
+
+      let msg = `⭐ <b>SUPER ADMIN PORTAL</b>\n\n` +
+        `👤 ስም: <b>${superAdmin?.display_name || "Super Admin"}</b>\n` +
+        `🏦 የፍሎት ካዝና (Float Balance): <b>${Number(superAdmin?.float_balance || 0).toFixed(2)} ETB</b>\n\n` +
+        `📋 <b>በስርዎ ያሉ አድሚኖች:</b>\n`;
+
+      if (underAdmins && underAdmins.length > 0) {
+        for (const a of underAdmins) {
+          msg += `• <b>${a.display_name}</b> (@${a.telegram_username}) - ፍሎት: <b>${a.float_balance} ETB</b> [${a.is_active ? '✅ ንቁ' : '🚫 የታገደ'}]\n`;
+        }
+      } else {
+        msg += `<i>በስርዎ የተመዘገበ አድሚን የለም</i>\n`;
+      }
+
+      await sendTelegramMessage(botToken, chatId, msg);
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Default Fallback
     await sendTelegramMessage(
       botToken,
       chatId,
-      `ℹ️ <b>Ye Addis Games Commands:</b>\n\n` +
-      `/start - Open main games menu\n` +
-      `/play - Play Live Bingo (6 Room Sections)\n` +
-      `/balance - Check your balances across admins\n` +
-      `/rooms - View all live Bingo rooms\n` +
-      `/invite - Get your referral link & earn bonuses\n\n` +
-      `<i>Admins:</i>\n` +
-      `/credit &lt;user_id&gt; &lt;amount&gt; - Credit user under your sheet\n` +
-      `/debit &lt;user_id&gt; &lt;amount&gt; - Debit user\n` +
-      `/sheet - View your daily sheet & winner commission earnings`
+      `ℹ️ <b>የአዲስ ጌምስ ትዕዛዞች (Ye Addis Games Commands):</b>\n\n` +
+      `/start - ዋና ማውጫ (Main Menu)\n` +
+      `/play - ቢንጎ ጨዋታ ይክፈቱ (6 Room Sections)\n` +
+      `/balance - የሂሳብ መጠንዎን ይመልከቱ (My Balances)\n` +
+      `/rooms - የቀጥታ ቢንጎ ክፍሎች ዝርዝር\n` +
+      `/invite - የግብዣ ሊንክዎን ወስደው ቦነስ ያግኙ\n\n` +
+      `<i>👤 ለአስተዳዳሪዎች (Admins):</i>\n` +
+      `/credit &lt;user_id&gt; &lt;amount&gt; - ለተጫዋች ሂሳብ መሙላት\n` +
+      `/debit &lt;user_id&gt; &lt;amount&gt; - ከተጫዋች ሂሳብ መቀነስ\n` +
+      `/sheet - የቀን ገቢ፣ ኮሚሽን እና የተጫዋቾች ስታትስቲክስ\n\n` +
+      `<i>👑 ለኦውነር (@decaphone):</i>\n` +
+      `/owner - አጠቃላይ የሲስተም ሪፖርት እና ቁጥጥር\n` +
+      `/disputes - አጠራጣሪ ክፍያዎችን መከታተያ`
     );
 
     return new Response(JSON.stringify({ ok: true }), {
