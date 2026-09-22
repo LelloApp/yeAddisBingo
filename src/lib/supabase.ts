@@ -76,6 +76,13 @@ export interface Admin {
   float_balance?: number;
   phone?: string;
   pin_code?: string;
+  telebirr_account?: string;
+  telebirr_account_name?: string;
+  cbe_account?: string;
+  cbe_account_name?: string;
+  bank_name?: string;
+  bank_account?: string;
+  bank_account_name?: string;
   is_active?: boolean;
 }
 

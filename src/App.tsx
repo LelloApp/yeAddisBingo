@@ -70,19 +70,9 @@ function AppContent() {
   useEffect(() => {
     const DEFAULT_ROOMS: BingoGroup[] = [
       {
-        id: 'beginner_room',
-        slug: 'beginner_room',
-        name: '🌱 Beginner Room (5 ETB)',
-        admin_name: 'Parcelic Admin',
-        admin_username: 'parcelic',
-        stake_amount: 5,
-        min_balance: 5,
-        online_players_count: 5,
-      },
-      {
         id: 'starter_room',
         slug: 'starter_room',
-        name: '🎯 Starter Room (10 ETB)',
+        name: '🌱 ጀማሪ (10 ETB)',
         admin_name: 'Parcelic Admin',
         admin_username: 'parcelic',
         stake_amount: 10,
@@ -92,7 +82,7 @@ function AppContent() {
       {
         id: 'standard_room',
         slug: 'standard_room',
-        name: '🎲 Standard Room (15 ETB)',
+        name: '🎲 ዱብዱብ (15 ETB)',
         admin_name: 'Parcelic Admin',
         admin_username: 'parcelic',
         stake_amount: 15,
@@ -102,7 +92,7 @@ function AppContent() {
       {
         id: 'addis_classic',
         slug: 'addis_classic',
-        name: '🏆 Addis Classic (25 ETB)',
+        name: '🏆 ክላሲክ (25 ETB)',
         admin_name: 'Parcelic Admin',
         admin_username: 'parcelic',
         stake_amount: 25,
@@ -112,7 +102,7 @@ function AppContent() {
       {
         id: 'vip_diamond',
         slug: 'vip_diamond',
-        name: '💎 VIP Diamond (50 ETB)',
+        name: '💎 VIP ዳይመንድ (50 ETB)',
         admin_name: 'Parcelic Admin',
         admin_username: 'parcelic',
         stake_amount: 50,
@@ -122,7 +112,7 @@ function AppContent() {
       {
         id: 'high_roller',
         slug: 'high_roller',
-        name: '👑 High Roller (100 ETB)',
+        name: '👑 VIP ዘውድ (100 ETB)',
         admin_name: 'Parcelic Admin',
         admin_username: 'parcelic',
         stake_amount: 100,

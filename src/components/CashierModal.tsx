@@ -353,27 +353,84 @@ export const CashierModal: React.FC<CashierModalProps> = ({
               {/* Agent Payment Destination Box */}
               <div className="bg-slate-950 border border-amber-500/30 rounded-2xl p-3.5 space-y-2.5">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-amber-400">Agent Payment Account</span>
+                  <span className="text-xs font-bold text-amber-400">የወኪሉ የክፍያ አካውንቶች (Payment Accounts)</span>
                   <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-semibold">
                     {selectedAdmin?.display_name}
                   </span>
                 </div>
+
+                {/* Telebirr */}
                 <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-xl border border-slate-800 text-xs">
                   <div>
-                    <div className="text-[10px] text-slate-400">Telebirr / Phone:</div>
-                    <div className="font-mono font-bold text-white text-sm">
-                      {selectedAdmin?.phone || '0911234567'}
+                    <div className="text-[10px] text-amber-400 font-semibold flex items-center gap-1">
+                      <span>ቴሌብር (Telebirr):</span>
+                      {selectedAdmin?.telebirr_account_name && (
+                        <span className="text-slate-300 font-normal">({selectedAdmin.telebirr_account_name})</span>
+                      )}
+                    </div>
+                    <div className="font-mono font-bold text-white text-sm mt-0.5">
+                      {selectedAdmin?.telebirr_account || selectedAdmin?.phone || '0911234567'}
                     </div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleCopy(selectedAdmin?.phone || '0911234567', 'admin_phone')}
+                    onClick={() => handleCopy(selectedAdmin?.telebirr_account || selectedAdmin?.phone || '0911234567', 'admin_telebirr')}
                     className="p-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-xs flex items-center gap-1"
                   >
-                    {copiedField === 'admin_phone' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedField === 'admin_phone' ? 'Copied' : 'Copy'}</span>
+                    {copiedField === 'admin_telebirr' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedField === 'admin_telebirr' ? 'ኮፒ ተደርጓል' : 'ኮፒ'}</span>
                   </button>
                 </div>
+
+                {/* CBE if available */}
+                {selectedAdmin?.cbe_account && (
+                  <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-xl border border-slate-800 text-xs">
+                    <div>
+                      <div className="text-[10px] text-purple-400 font-semibold flex items-center gap-1">
+                        <span>ንግድ ባንክ (CBE):</span>
+                        {selectedAdmin?.cbe_account_name && (
+                          <span className="text-slate-300 font-normal">({selectedAdmin.cbe_account_name})</span>
+                        )}
+                      </div>
+                      <div className="font-mono font-bold text-white text-sm mt-0.5">
+                        {selectedAdmin.cbe_account}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(selectedAdmin.cbe_account!, 'admin_cbe')}
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-purple-400 rounded-lg text-xs flex items-center gap-1"
+                    >
+                      {copiedField === 'admin_cbe' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedField === 'admin_cbe' ? 'ኮፒ ተደርጓል' : 'ኮፒ'}</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Other Bank if available */}
+                {selectedAdmin?.bank_account && (
+                  <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-xl border border-slate-800 text-xs">
+                    <div>
+                      <div className="text-[10px] text-sky-400 font-semibold flex items-center gap-1">
+                        <span>{selectedAdmin.bank_name || 'ባንክ'}:</span>
+                        {selectedAdmin?.bank_account_name && (
+                          <span className="text-slate-300 font-normal">({selectedAdmin.bank_account_name})</span>
+                        )}
+                      </div>
+                      <div className="font-mono font-bold text-white text-sm mt-0.5">
+                        {selectedAdmin.bank_account}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(selectedAdmin.bank_account!, 'admin_bank')}
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg text-xs flex items-center gap-1"
+                    >
+                      {copiedField === 'admin_bank' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedField === 'admin_bank' ? 'ኮፒ ተደርጓል' : 'ኮፒ'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Amount Selection */}

@@ -229,41 +229,91 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     return () => clearInterval(interval);
   }, [drawTime, isDrawing, isRolling4Digit, totalPot, activeTokens.length]);
 
+  // Generate realistic sample tokens across 6 admins for live demo
+  const generateDemoTokens = (): LottoTokenItem[] => {
+    const sampleAdmins = [
+      { id: 'adm-1', name: 'Parcelic (Admin)', color: '#06b6d4' },
+      { id: 'adm-2', name: 'Fekadu (Kera)', color: '#10b981' },
+      { id: 'adm-3', name: 'Hasen (Stadium)', color: '#8b5cf6' },
+      { id: 'adm-4', name: 'Abebe (Bole)', color: '#f59e0b' },
+      { id: 'adm-5', name: 'Selam (Megenagna)', color: '#ec4899' },
+      { id: 'adm-6', name: 'Dawit (Piazza)', color: '#3b82f6' },
+    ];
+    const sampleUsers = [
+      'ዳዊት ተ.', 'ሰላማዊት ከ.', 'ዮናስ መ.', 'ቤተልሔም አ.', 'ኪዱስ ባ.',
+      'አልማዝ ገ.', 'ኤፍሬም ደ.', 'ሃና ወ.', 'ቢንያም ሲ.', 'ሜሮን ፈ.',
+      'ቴዎድሮስ ሃ.', 'ራሄል ተ.', 'ናሆም ዛ.', 'ህይወት ማ.', 'ኤርሚያስ ላ.'
+    ];
+    const list: LottoTokenItem[] = [];
+    let tokenNo = 1001;
+    for (let i = 0; i < 72; i++) {
+      const adm = sampleAdmins[i % sampleAdmins.length];
+      const uIdx = (i * 7) % sampleUsers.length;
+      list.push({
+        id: `demo-token-${i}`,
+        tokenNumber: tokenNo++,
+        telegramUserId: 100000 + uIdx,
+        userName: sampleUsers[uIdx],
+        adminId: adm.id,
+        adminName: adm.name,
+        adminColor: adm.color,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    return list;
+  };
+
+  // Demo Draw Sequence Trigger (Realistic 30-Second Dramatic Show)
+  const startDemoDrawing = () => {
+    if (isDrawing) return;
+    let pool = activeTokens;
+    if (pool.length < 15) {
+      pool = generateDemoTokens();
+      setActiveTokens(pool);
+    }
+    setWinners([]);
+    setCelebratingWinner(null);
+    startDrawingFlow(true, pool);
+  };
+
   // Draw Sequence Trigger
-  const startDrawingFlow = async () => {
-    if (isDrawing || activeTokens.length === 0) return;
+  const startDrawingFlow = async (isDemo = false, poolOverride?: LottoTokenItem[]) => {
+    const pool = poolOverride || activeTokens;
+    if (isDrawing || pool.length === 0) return;
     setIsDrawing(true);
     triggerHaptic('heavy');
 
     // 1. Freeze seed number
     const seed = random4Digit || Math.floor(1000 + Math.random() * 9000);
     setRandom4Digit(seed);
-    setStatusMessage(`🎲 Random Seed: ${seed} • Decelerating Pointer Rotation Initialized`);
+    setStatusMessage(`🎲 የዘፈቀደ ቁጥር (Seed): ${seed} • የሜጋ ሰርክል 3D እጣ አወጣጥ ተጀምሯል!`);
 
-    // Winner 1 Draw: 5-minute decelerating revolution (or accelerated in fast mode)
-    const spinDuration = selectedSpeed === 'fast' ? 8000 : 300000; // 8s vs 5 mins
-    await spinPointerToWinner(1, spinDuration, seed);
+    // Winner 1 Draw: 16-18 seconds decelerating spin in demo mode (vs 300s scheduled)
+    const spinDuration = isDemo ? 17000 : 300000;
+    await spinPointerToWinner(1, spinDuration, seed, isDemo, pool);
   };
 
   // Spin Pointer Physics
   const spinPointerToWinner = async (
     targetRank: number,
     durationMs: number,
-    seed: number
+    seed: number,
+    isDemo = false,
+    pool: LottoTokenItem[] = activeTokens
   ): Promise<void> => {
     return new Promise((resolve) => {
-      if (activeTokens.length === 0) {
+      if (pool.length === 0) {
         resolve();
         return;
       }
 
       // Pick winner using fair weighted probability
-      const winnerIdx = Math.floor((seed * 9301 + 49297) % activeTokens.length);
-      const chosenToken = activeTokens[winnerIdx];
-      const targetTokenAngle = (winnerIdx / activeTokens.length) * 360;
+      const winnerIdx = Math.floor((seed * 9301 + 49297) % pool.length);
+      const chosenToken = pool[winnerIdx];
+      const targetTokenAngle = (winnerIdx / pool.length) * 360;
 
       // Full spins + target angle
-      const fullRotations = targetRank === 1 ? (selectedSpeed === 'fast' ? 6 : 40) : 2;
+      const fullRotations = targetRank === 1 ? (isDemo ? 12 : 45) : 3;
       const startAngle = pointerAngle % 360;
       const totalDelta = fullRotations * 360 + (targetTokenAngle - startAngle);
       const startTime = performance.now();
@@ -275,13 +325,13 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         const progress = Math.min(1, elapsed / durationMs);
 
         // Decelerating exponential easing curve
-        const easeOut = 1 - Math.pow(1 - progress, 3.5);
+        const easeOut = 1 - Math.pow(1 - progress, 3.8);
         const currentAngle = startAngle + totalDelta * easeOut;
         setPointerAngle(currentAngle);
 
         // Sound tick every token passed
-        if (Math.abs(currentAngle - lastTickAngle) >= (360 / Math.max(activeTokens.length, 12))) {
-          playTickSound(targetRank === 1 ? 750 : 850);
+        if (Math.abs(currentAngle - lastTickAngle) >= (360 / Math.max(pool.length, 12))) {
+          playTickSound(targetRank === 1 ? 750 : 880);
           lastTickAngle = currentAngle;
         }
 
@@ -289,7 +339,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
           animationFrameRef.current = requestAnimationFrame(animate);
         } else {
           // Pointer has landed!
-          handleWinnerLanded(chosenToken, targetRank);
+          handleWinnerLanded(chosenToken, targetRank, isDemo, pool);
           resolve();
         }
       };
@@ -298,7 +348,12 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     });
   };
 
-  const handleWinnerLanded = (winningToken: LottoTokenItem, rank: number) => {
+  const handleWinnerLanded = (
+    winningToken: LottoTokenItem,
+    rank: number,
+    isDemo = false,
+    pool: LottoTokenItem[] = activeTokens
+  ) => {
     playFanfareSound();
     triggerHaptic('heavy');
 
@@ -316,18 +371,35 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     const updatedWinners = [...winners, newWinner];
     setWinners(updatedWinners);
     setCelebratingWinner(newWinner);
-    setCelebrationCountdown(20);
 
     // Prune ALL tokens belonging to this winning user from the Mega Circle
-    const remainingTokens = activeTokens.filter(
+    const remainingTokens = pool.filter(
       (t) => t.telegramUserId !== winningToken.telegramUserId
     );
     setActiveTokens(remainingTokens);
 
-    setStatusMessage(`🎉 WINNER #${rank}! ${winningToken.userName} won ${prizeWon.toLocaleString()} ETB (${winningToken.adminName})!`);
+    setStatusMessage(`🎉 አሸናፊ #${rank}! ${winningToken.userName} ${prizeWon.toLocaleString()} ETB አሸንፈዋል (${winningToken.adminName})!`);
 
-    // 20 Seconds Celebration Timer
-    let countdown = 20;
+    // Fallback: If no more tokens remain before rank 10, redistribute remainder to drawn winners
+    if (remainingTokens.length === 0 && rank < 10) {
+      const undistributedPot = prizeStakes.slice(rank).reduce((a, b) => a + b, 0);
+      if (undistributedPot > 0 && updatedWinners.length > 0) {
+        const totalCurrent = updatedWinners.reduce((a, w) => a + w.prizeAmount, 0) || 1;
+        const redistributed = updatedWinners.map((w) => ({
+          ...w,
+          prizeAmount: Math.round(w.prizeAmount + (w.prizeAmount / totalCurrent) * undistributedPot),
+        }));
+        setWinners(redistributed);
+        setIsDrawing(false);
+        setStatusMessage(`🏆 ሁሉም እጣዎች ተጠናቀዋል! የቀረው ካዝና (${undistributedPot.toLocaleString()} ETB) ለአሸናፊዎች ተከፋፍሏል!`);
+        if (onDrawCompleted) onDrawCompleted(redistributed);
+        return;
+      }
+    }
+
+    // Celebration Timer: 4s in demo mode, 20s in live mode
+    let countdown = isDemo ? 4 : 20;
+    setCelebrationCountdown(countdown);
     const celebrationInterval = setInterval(() => {
       countdown -= 1;
       setCelebrationCountdown(countdown);
@@ -336,18 +408,17 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         clearInterval(celebrationInterval);
         setCelebratingWinner(null);
 
-        // Step-by-step advance to next rank if under 10
+        // Advance to next rank if under 10 and tokens remain
         if (rank < 10 && remainingTokens.length > 0) {
           const nextRank = rank + 1;
           setCurrentDrawingRank(nextRank);
-          // Step slowly forward one token at a time for remaining winners
           const stepSeed = Math.floor(Math.random() * 9000);
-          const nextDuration = selectedSpeed === 'fast' ? 2500 : 7000;
-          spinPointerToWinner(nextRank, nextDuration, stepSeed);
+          const nextDuration = isDemo ? 1800 : 7000;
+          spinPointerToWinner(nextRank, nextDuration, stepSeed, isDemo, remainingTokens);
         } else {
           // All 10 winners drawn or no more tokens!
           setIsDrawing(false);
-          setStatusMessage('🏆 ALL 10 WINNERS DRAWN! Board displayed for the next 1 hour.');
+          setStatusMessage('🏆 ሁሉም 10 አሸናፊዎች ወጥተዋል! ውጤቱ ለ1 ሰአት በቦርዱ ላይ ይቆያል።');
           if (onDrawCompleted) {
             onDrawCompleted(updatedWinners);
           }
@@ -498,44 +569,91 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         <div className="relative w-[340px] h-[340px] flex items-center justify-center">
           <svg viewBox="0 0 350 350" className="w-full h-full select-none">
             <defs>
-              <radialGradient id="clockDialGrad" cx="50%" cy="50%" r="50%">
+              {/* 3D Casino Metallic Gold Rim Gradient */}
+              <linearGradient id="goldBevelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#fef08a" />
+                <stop offset="25%" stopColor="#eab308" />
+                <stop offset="50%" stopColor="#ca8a04" />
+                <stop offset="75%" stopColor="#facc15" />
+                <stop offset="100%" stopColor="#78350f" />
+              </linearGradient>
+
+              {/* Casino Velvet Felt Background */}
+              <radialGradient id="casinoFeltGrad" cx="50%" cy="50%" r="50%">
                 <stop offset="0%" stopColor="#0f172a" />
-                <stop offset="85%" stopColor="#020617" />
-                <stop offset="100%" stopColor="#1e293b" />
+                <stop offset="65%" stopColor="#020617" />
+                <stop offset="100%" stopColor="#050505" />
               </radialGradient>
+
+              <radialGradient id="centerJewelGrad" cx="35%" cy="35%" r="65%">
+                <stop offset="0%" stopColor="#fef08a" />
+                <stop offset="50%" stopColor="#eab308" />
+                <stop offset="100%" stopColor="#78350f" />
+              </radialGradient>
+
               <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
             </defs>
 
-            {/* Outer Clock Rim & Markers */}
+            {/* 3D Casino Outer Gold Rim */}
             <circle
               cx={centerCoord}
               cy={centerCoord}
-              r={circleRadius + 18}
-              fill="url(#clockDialGrad)"
-              stroke="#334155"
-              strokeWidth="4"
+              r={circleRadius + 24}
+              fill="#0a0a0a"
+              stroke="url(#goldBevelGrad)"
+              strokeWidth="7"
+            />
+
+            {/* 24 Glowing Perimeter LED Studs */}
+            {Array.from({ length: 24 }).map((_, i) => {
+              const angle = (i * 15 * Math.PI) / 180;
+              const rx = centerCoord + (circleRadius + 24) * Math.sin(angle);
+              const ry = centerCoord - (circleRadius + 24) * Math.cos(angle);
+              const isLit = isDrawing ? (Math.floor(pointerAngle / 15) % 24 === i) : i % 2 === 0;
+              return (
+                <circle
+                  key={`led-${i}`}
+                  cx={rx}
+                  cy={ry}
+                  r="2.8"
+                  fill={isLit ? '#fef08a' : '#ca8a04'}
+                  stroke="#78350f"
+                  strokeWidth="0.8"
+                  filter={isLit ? 'url(#neonGlow)' : undefined}
+                />
+              );
+            })}
+
+            {/* Inner Gold Inlay & Felt Field */}
+            <circle
+              cx={centerCoord}
+              cy={centerCoord}
+              r={circleRadius + 16}
+              fill="url(#casinoFeltGrad)"
+              stroke="url(#goldBevelGrad)"
+              strokeWidth="2.5"
             />
             <circle
               cx={centerCoord}
               cy={centerCoord}
-              r={circleRadius + 14}
+              r={circleRadius + 12}
               fill="none"
-              stroke="#f59e0b"
-              strokeWidth="1.5"
-              strokeDasharray="4 8"
-              opacity="0.4"
+              stroke="#ca8a04"
+              strokeWidth="1"
+              strokeDasharray="3 6"
+              opacity="0.5"
             />
 
             {/* 12 Hour Clock Ticks */}
             {Array.from({ length: 12 }).map((_, idx) => {
               const tickAngle = (idx * 30 * Math.PI) / 180;
-              const x1 = centerCoord + (circleRadius + 8) * Math.sin(tickAngle);
-              const y1 = centerCoord - (circleRadius + 8) * Math.cos(tickAngle);
-              const x2 = centerCoord + (circleRadius + 15) * Math.sin(tickAngle);
-              const y2 = centerCoord - (circleRadius + 15) * Math.cos(tickAngle);
+              const x1 = centerCoord + (circleRadius + 5) * Math.sin(tickAngle);
+              const y1 = centerCoord - (circleRadius + 5) * Math.cos(tickAngle);
+              const x2 = centerCoord + (circleRadius + 12) * Math.sin(tickAngle);
+              const y2 = centerCoord - (circleRadius + 12) * Math.cos(tickAngle);
               return (
                 <line
                   key={idx}
@@ -543,9 +661,9 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                   y1={y1}
                   x2={x2}
                   y2={y2}
-                  stroke="#cbd5e1"
-                  strokeWidth={idx % 3 === 0 ? '3' : '1.5'}
-                  opacity={idx % 3 === 0 ? '0.8' : '0.4'}
+                  stroke="#fef08a"
+                  strokeWidth={idx % 3 === 0 ? '2.5' : '1.2'}
+                  opacity={idx % 3 === 0 ? '0.9' : '0.4'}
                 />
               );
             })}
@@ -560,10 +678,10 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
               const adminProb = adminProbabilities[token.adminId] || 10;
               const isLowProb = adminProb < 15;
               // Dim low probability tokens and brighten high probability tokens
-              const tokenOpacity = isLowProb ? 0.35 : Math.min(1, 0.6 + (adminProb / 100) * 0.4);
+              const tokenOpacity = isLowProb ? 0.35 : Math.min(1, 0.65 + (adminProb / 100) * 0.35);
 
               // Dynamic font & dot size based on total token count
-              const dotSize = activeTokens.length > 50 ? 4 : activeTokens.length > 25 ? 6 : 8;
+              const dotSize = activeTokens.length > 50 ? 4.5 : activeTokens.length > 25 ? 6.5 : 8.5;
               const fontSize = activeTokens.length > 50 ? '7px' : '9px';
 
               return (
@@ -576,7 +694,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                   <circle
                     r={dotSize}
                     fill={tokenColor}
-                    stroke="#0f172a"
+                    stroke="#020617"
                     strokeWidth="1.5"
                     filter={isLowProb ? undefined : 'url(#neonGlow)'}
                   />
@@ -587,7 +705,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                       fill="#ffffff"
                       fontSize={fontSize}
                       fontWeight="bold"
-                      className="pointer-events-none"
+                      className="pointer-events-none select-none"
                     >
                       #{token.tokenNumber}
                     </text>
@@ -596,22 +714,24 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
               );
             })}
 
-            {/* Central Clock Hand / Revolving Pointer */}
+            {/* 3D Casino Golden Pointer Arrow */}
             <g transform={`rotate(${pointerAngle}, ${centerCoord}, ${centerCoord})`}>
               {/* Pointer Arrow */}
               <line
                 x1={centerCoord}
                 y1={centerCoord}
                 x2={centerCoord}
-                y2={centerCoord - circleRadius + 10}
-                stroke="#f59e0b"
-                strokeWidth="4"
+                y2={centerCoord - circleRadius + 8}
+                stroke="url(#goldBevelGrad)"
+                strokeWidth="5"
                 strokeLinecap="round"
                 filter="url(#neonGlow)"
               />
               <polygon
-                points={`${centerCoord},${centerCoord - circleRadius + 2} ${centerCoord - 6},${centerCoord - circleRadius + 18} ${centerCoord + 6},${centerCoord - circleRadius + 18}`}
-                fill="#f59e0b"
+                points={`${centerCoord},${centerCoord - circleRadius - 1} ${centerCoord - 8},${centerCoord - circleRadius + 18} ${centerCoord + 8},${centerCoord - circleRadius + 18}`}
+                fill="url(#goldBevelGrad)"
+                stroke="#78350f"
+                strokeWidth="1"
                 filter="url(#neonGlow)"
               />
               {/* Counter-balance tail */}
@@ -619,21 +739,21 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                 x1={centerCoord}
                 y1={centerCoord}
                 x2={centerCoord}
-                y2={centerCoord + 25}
-                stroke="#94a3b8"
-                strokeWidth="2.5"
+                y2={centerCoord + 28}
+                stroke="#cbd5e1"
+                strokeWidth="3"
                 strokeLinecap="round"
               />
             </g>
 
-            {/* Central Clock Hub */}
+            {/* Central 3D Casino Jewel Hub */}
             <circle
               cx={centerCoord}
               cy={centerCoord}
-              r="14"
-              fill="#f59e0b"
+              r="15"
+              fill="url(#centerJewelGrad)"
               stroke="#0f172a"
-              strokeWidth="3"
+              strokeWidth="3.5"
             />
             <circle
               cx={centerCoord}
@@ -659,10 +779,10 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                 +{celebratingWinner.prizeAmount.toLocaleString()} ETB
               </div>
               <div className="text-xs text-slate-400 mt-1">
-                Ticket #{celebratingWinner.tokenNumber} • Agent: {celebratingWinner.adminName}
+                እጣ #{celebratingWinner.tokenNumber} • ወኪል: {celebratingWinner.adminName}
               </div>
               <div className="mt-4 px-3 py-1 bg-slate-800 rounded-full text-xs text-amber-300 font-mono font-bold">
-                Next Draw in {celebrationCountdown}s...
+                ቀጣይ እጣ በ {celebrationCountdown} ሰከንድ ውስጥ...
               </div>
             </div>
           )}
@@ -687,26 +807,19 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         {winners.length > 0 && winners.length < 10 && (
           <div className="mt-1 flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
             <Info className="w-3 h-3 text-emerald-400" />
-            <span>Probabilities recalculated after Winner #{winners.length} (winner tokens pruned).</span>
+            <span>አሸናፊ #{winners.length} ከወጣ በኋላ የቀሩት እጣዎች እድል በድጋሚ ተሰልቷል።</span>
           </div>
         )}
 
         {/* Controls for Spectator / Demo */}
         {isDemoModeAllowed && !isDrawing && winners.length === 0 && (
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3.5 flex justify-center">
             <button
-              onClick={() => setSelectedSpeed(selectedSpeed === 'normal' ? 'fast' : 'normal')}
-              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 rounded-lg"
+              onClick={startDemoDrawing}
+              className="px-5 py-2.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black rounded-2xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
             >
-              Mode: {selectedSpeed === 'normal' ? '5-Min Spin' : 'Fast Demo (8s)'}
-            </button>
-            <button
-              onClick={startDrawingFlow}
-              disabled={activeTokens.length === 0}
-              className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md active:scale-95"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Start Draw Demo</span>
+              <Play className="w-4 h-4 fill-current text-slate-950" />
+              <span>የማሳያ እጣ ማውጣት (30s Live Demo)</span>
             </button>
           </div>
         )}

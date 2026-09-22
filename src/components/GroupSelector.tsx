@@ -28,7 +28,22 @@ interface GroupSelectorProps {
   onOpenCashier?: () => void;
 }
 
-type ActiveGameTab = 'bingo' | 'quiz';
+type ActiveGameTab = 'bingo' | 'lotto' | 'quiz';
+
+export const getAdminBadgeColor = (adminSlug?: string) => {
+  if (!adminSlug) return { bg: 'bg-amber-500/15 text-amber-300 border-amber-500/30', dot: 'bg-amber-400' };
+  const s = adminSlug.toLowerCase();
+  if (s.includes('parcelic')) {
+    return { bg: 'bg-sky-500/15 text-sky-300 border-sky-500/30', dot: 'bg-sky-400' };
+  }
+  if (s.includes('fekadu') || s.includes('kera')) {
+    return { bg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30', dot: 'bg-emerald-400' };
+  }
+  if (s.includes('hasen') || s.includes('stadium')) {
+    return { bg: 'bg-purple-500/15 text-purple-300 border-purple-500/30', dot: 'bg-purple-400' };
+  }
+  return { bg: 'bg-amber-500/15 text-amber-300 border-amber-500/30', dot: 'bg-amber-400' };
+};
 
 export const GroupSelector: React.FC<GroupSelectorProps> = ({
   groups,
@@ -114,38 +129,30 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  const getGroupTheme = (slug: string, stake: number, name?: string) => {
-    if (slug.includes('beginner') || stake === 5) {
-      return {
-        icon: '🌱',
-        displayName: 'ችግኝ (5 ETB)',
-        badge: 'ቀላል ደረጃ (ችግኝ)',
-        border: 'border-emerald-500/40 hover:border-emerald-400',
-        bg: 'from-emerald-950/40 via-slate-900 to-slate-950',
-        accent: 'text-emerald-400',
-        badgeBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
-      };
-    }
+  // 5 Active Rooms Distinct Color Palette
+  const getGroupTheme = (slug: string, stake: number) => {
     if (slug.includes('starter') || stake === 10) {
       return {
-        icon: '🎯',
+        icon: '🌱',
         displayName: 'ጀማሪ (10 ETB)',
-        badge: 'ጀማሪ አሬና',
-        border: 'border-blue-500/40 hover:border-blue-400',
-        bg: 'from-blue-950/40 via-slate-900 to-slate-950',
-        accent: 'text-blue-400',
-        badgeBg: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
+        badge: '🌱 ጀማሪ አሬና',
+        border: 'border-emerald-500/50 hover:border-emerald-400',
+        bg: 'from-emerald-950/40 via-slate-900 to-slate-950',
+        accent: 'text-emerald-400',
+        badgeBg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+        glow: 'shadow-emerald-500/10',
       };
     }
     if (slug.includes('standard') || stake === 15) {
       return {
         icon: '🎲',
         displayName: 'ዱብዱብ (15 ETB)',
-        badge: 'ዱብዱብ መደበኛ',
-        border: 'border-amber-500/40 hover:border-amber-400',
-        bg: 'from-amber-950/30 via-slate-900 to-slate-950',
-        accent: 'text-amber-400',
-        badgeBg: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+        badge: '🎲 ዱብዱብ መደበኛ',
+        border: 'border-cyan-500/50 hover:border-cyan-400',
+        bg: 'from-cyan-950/40 via-slate-900 to-slate-950',
+        accent: 'text-cyan-400',
+        badgeBg: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+        glow: 'shadow-cyan-500/10',
       };
     }
     if (slug.includes('classic') || stake === 25 || stake === 20) {
@@ -153,10 +160,11 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
         icon: '🏆',
         displayName: 'ክላሲክ (25 ETB)',
         badge: '🏆 1 የሱፐር ቦነስ እጣ (12+ ተጫዋቾች)',
-        border: 'border-yellow-500/40 hover:border-yellow-400',
-        bg: 'from-yellow-950/30 via-slate-900 to-slate-950',
-        accent: 'text-yellow-400',
-        badgeBg: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20',
+        border: 'border-indigo-500/50 hover:border-indigo-400',
+        bg: 'from-indigo-950/40 via-slate-900 to-slate-950',
+        accent: 'text-indigo-400',
+        badgeBg: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
+        glow: 'shadow-indigo-500/10',
       };
     }
     if (slug.includes('vip_diamond') || stake === 50) {
@@ -164,20 +172,22 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
         icon: '💎',
         displayName: 'VIP ዳይመንድ (50 ETB)',
         badge: '💎 2 የሱፐር ቦነስ እጣዎች (12+ ተጫዋቾች)',
-        border: 'border-cyan-500/40 hover:border-cyan-400',
-        bg: 'from-cyan-950/30 via-slate-900 to-slate-950',
-        accent: 'text-cyan-400',
-        badgeBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
+        border: 'border-rose-500/50 hover:border-rose-400',
+        bg: 'from-rose-950/40 via-slate-900 to-slate-950',
+        accent: 'text-rose-400',
+        badgeBg: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+        glow: 'shadow-rose-500/10',
       };
     }
     return {
       icon: '👑',
       displayName: 'VIP ዘውድ (100 ETB)',
       badge: '👑 4 የሱፐር ቦነስ እጣዎች (12+ ተጫዋቾች)',
-      border: 'border-purple-500/40 hover:border-purple-400',
-      bg: 'from-purple-950/30 via-slate-900 to-slate-950',
-      accent: 'text-purple-400',
-      badgeBg: 'bg-purple-500/10 text-purple-300 border-purple-500/20',
+      border: 'border-amber-400/60 hover:border-amber-300',
+      bg: 'from-amber-950/40 via-slate-900 to-slate-950',
+      accent: 'text-amber-300',
+      badgeBg: 'bg-amber-500/20 text-amber-200 border-amber-500/40',
+      glow: 'shadow-amber-500/15',
     };
   };
 
@@ -187,6 +197,8 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
     display_name: 'Parcelic Admin',
     telegram_username: 'parcelic'
   });
+
+  const adminTheme = getAdminBadgeColor(currentAdmin.slug);
 
   const handleOpenTopup = () => {
     triggerHaptic('light');
@@ -219,22 +231,37 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
         </p>
       </div>
 
-      {/* Top Primary Navigation Menu: ቢንጎ, የቀኑ ጥያቄዎች, ገቢ ወጪ */}
+      {/* Top Primary Navigation Menu: ቢንጎ, ሎቶዎች, የቀኑ ጥያቄዎች, ገቢ ወጪ */}
       <div className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur-md py-1">
-        <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
+        <div className="grid grid-cols-4 gap-1 p-1 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
           <button
             onClick={() => {
               triggerHaptic('light');
               setActiveTab('bingo');
             }}
-            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-black transition-all ${
+            className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all ${
               activeTab === 'bingo'
                 ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md shadow-amber-500/20'
                 : 'text-slate-300 hover:text-white'
             }`}
           >
-            <Gamepad2 className="w-4 h-4" />
+            <Gamepad2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span>ቢንጎ</span>
+          </button>
+
+          <button
+            onClick={() => {
+              triggerHaptic('light');
+              setActiveTab('lotto');
+            }}
+            className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all ${
+              activeTab === 'lotto'
+                ? 'bg-gradient-to-r from-amber-600 via-yellow-600 to-purple-600 text-white shadow-md shadow-purple-500/20'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <Ticket className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-300" />
+            <span>ሎቶዎች</span>
           </button>
 
           <button
@@ -242,14 +269,14 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
               triggerHaptic('light');
               setActiveTab('quiz');
             }}
-            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-black transition-all ${
+            className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all ${
               activeTab === 'quiz'
                 ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/20'
                 : 'text-slate-300 hover:text-white'
             }`}
           >
-            <Brain className="w-4 h-4 text-indigo-400" />
-            <span>የቀኑ ጥያቄዎች</span>
+            <Brain className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
+            <span className="truncate">ጥያቄዎች</span>
           </button>
 
           <button
@@ -257,9 +284,9 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
               triggerHaptic('light');
               if (onOpenCashier) onOpenCashier();
             }}
-            className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-black transition-all bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+            className="flex flex-col sm:flex-row items-center justify-center gap-1 py-2 rounded-xl text-[11px] sm:text-xs font-black transition-all bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
           >
-            <Coins className="w-4 h-4 text-emerald-400" />
+            <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
             <span>ገቢ ወጪ</span>
           </button>
         </div>
@@ -281,79 +308,100 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
         </div>
       )}
 
-      {/* Bingo Hub & Featured Lottos */}
-      {activeTab === 'bingo' && (
-        <>
-          {/* Featured Lotto 1: የአዲስ ዕለታዊ ሎቶ (ማታ 12 ሰአት) */}
+      {/* Standalone Lottos Tab (ዕለታዊ ሎቶ & ሱፐር ቦነስ ሎቶ) */}
+      {activeTab === 'lotto' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center px-1">
+            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Ticket className="w-4 h-4 text-amber-400" />
+              <span>የአዲስ የቀን ሎቶዎች</span>
+            </span>
+            <span className="text-[11px] text-amber-400 font-semibold flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" />
+              <span>በየቀኑ ማታ 12 & 1 ሰአት</span>
+            </span>
+          </div>
+
+          {/* Featured Lotto 1: የአዲስ ዕለታዊ ሎቶ (ማታ 12 ሰአት) - Gold Palette */}
           <div
             onClick={() => {
               triggerHaptic('medium');
               if (onNavigateToLotto) onNavigateToLotto();
             }}
-            className="bg-gradient-to-r from-amber-950/50 via-slate-900 to-slate-950 border border-amber-500/40 hover:border-amber-400 rounded-3xl p-4 cursor-pointer shadow-xl active:scale-[0.99] transition-all"
+            className="bg-gradient-to-br from-amber-950/60 via-slate-900 to-slate-950 border border-amber-500/50 hover:border-amber-400 rounded-3xl p-5 cursor-pointer shadow-2xl active:scale-[0.99] transition-all relative overflow-hidden"
           >
+            <div className="absolute -top-12 -right-12 w-36 h-36 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
             <div className="flex justify-between items-start">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 border border-amber-500/30">
-                  <Ticket className="w-6 h-6" />
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 border border-amber-500/40 shadow-inner">
+                  <Ticket className="w-7 h-7" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-black text-white text-sm sm:text-base">
+                    <h3 className="font-black text-white text-base sm:text-lg">
                       ዕለታዊ ሎቶ (ማታ 12 ሰአት)
                     </h3>
                   </div>
-                  <div className="text-[11px] text-amber-400/90 font-bold mt-0.5 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5" />
-                    <span>{lottoInfo.players} ተጫዋቾች</span>
+                  <div className="text-xs text-amber-400/90 font-bold mt-1 flex items-center gap-2">
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>{lottoInfo.players} ተጫዋቾች</span>
+                    </span>
                     <span>•</span>
-                    <span>{lottoInfo.tokens} እጣዎች ተገዝተዋል</span>
+                    <span>{lottoInfo.tokens} እጣዎች</span>
                   </div>
                 </div>
               </div>
 
               <div className="text-right">
-                <div className="flex items-center justify-end gap-1 text-[11px] text-amber-400 font-bold">
-                  <SafeDepositBoxIcon className="w-3.5 h-3.5" />
+                <div className="flex items-center justify-end gap-1 text-xs text-amber-400 font-bold">
+                  <SafeDepositBoxIcon className="w-4 h-4" />
                   <span>ካዝና</span>
                 </div>
-                <div className="text-base font-black text-white font-mono">
+                <div className="text-lg sm:text-xl font-black text-amber-300 font-mono mt-0.5">
                   {lottoInfo.pot.toLocaleString()} ETB
                 </div>
               </div>
             </div>
 
-            <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex justify-between items-center text-[11px]">
-              <span className="text-slate-400">100 ETB በአንድ እጣ • 10 አሸናፊዎች</span>
-              <span className="text-amber-400 font-bold flex items-center gap-1">
+            <p className="text-xs text-slate-300 mt-3 leading-relaxed">
+              100 ብር በአንድ እጣ • 10 እድለኛ አሸናፊዎች በየቀኑ ማታ 12 ሰአት በሜጋ ሰርክል እጣ ይሸለማሉ!
+            </p>
+
+            <div className="mt-4 pt-3 border-t border-slate-800/80 flex justify-between items-center text-xs">
+              <span className="text-amber-400/80 font-medium">100 ETB / እጣ</span>
+              <span className="bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black px-4 py-2 rounded-xl text-xs shadow-md flex items-center gap-1">
                 <span>እጣዎችን ይግዙ / ይመልከቱ</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-4 h-4" />
               </span>
             </div>
           </div>
 
-          {/* Featured Lotto 2: ሱፐር ቦነስ ሎቶ (ማታ 1 ሰአት) */}
+          {/* Featured Lotto 2: ሱፐር ቦነስ ሎቶ (ማታ 1 ሰአት) - Royal Violet Palette */}
           <div
             onClick={() => {
               triggerHaptic('medium');
               if (onNavigateToSuperBonus) onNavigateToSuperBonus();
             }}
-            className="bg-gradient-to-r from-purple-950/50 via-slate-900 to-slate-950 border border-purple-500/40 hover:border-purple-400 rounded-3xl p-4 cursor-pointer shadow-xl active:scale-[0.99] transition-all"
+            className="bg-gradient-to-br from-purple-950/60 via-slate-900 to-slate-950 border border-purple-500/50 hover:border-purple-400 rounded-3xl p-5 cursor-pointer shadow-2xl active:scale-[0.99] transition-all relative overflow-hidden"
           >
+            <div className="absolute -top-12 -right-12 w-36 h-36 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
             <div className="flex justify-between items-start">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30">
-                  <Sparkles className="w-6 h-6" />
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-300 border border-purple-500/40 shadow-inner">
+                  <Sparkles className="w-7 h-7" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-black text-white text-sm sm:text-base">
+                    <h3 className="font-black text-white text-base sm:text-lg">
                       ሱፐር ቦነስ ሎቶ (ማታ 1 ሰአት)
                     </h3>
                   </div>
-                  <div className="text-[11px] text-purple-300 font-bold mt-0.5 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5" />
-                    <span>{superBonusInfo.players} ተጫዋቾች</span>
+                  <div className="text-xs text-purple-300 font-bold mt-1 flex items-center gap-2">
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>{superBonusInfo.players} ተጫዋቾች</span>
+                    </span>
                     <span>•</span>
                     <span>{superBonusInfo.tokens} ነጻ እጣዎች</span>
                   </div>
@@ -361,25 +409,34 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
               </div>
 
               <div className="text-right">
-                <div className="flex items-center justify-end gap-1 text-[11px] text-purple-300 font-bold">
-                  <SafeDepositBoxIcon className="w-3.5 h-3.5" />
+                <div className="flex items-center justify-end gap-1 text-xs text-purple-300 font-bold">
+                  <SafeDepositBoxIcon className="w-4 h-4" />
                   <span>ካዝና</span>
                 </div>
-                <div className="text-base font-black text-white font-mono">
+                <div className="text-lg sm:text-xl font-black text-purple-300 font-mono mt-0.5">
                   {superBonusInfo.pot.toLocaleString()} ETB
                 </div>
               </div>
             </div>
 
-            <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex justify-between items-center text-[11px]">
-              <span className="text-slate-400">ከ25+ ብር ክፍሎች ሲያሸንፉ የሚገኝ ነጻ እጣ</span>
-              <span className="text-purple-400 font-bold flex items-center gap-1">
+            <p className="text-xs text-slate-300 mt-3 leading-relaxed">
+              ከ25+ ብር የቢንጎ ክፍሎች ሲያሸንፉ የሚሰጥ ልዩ ነጻ እጣ! 10 አሸናፊዎች በየቀኑ ማታ 1 ሰአት ይሸለማሉ።
+            </p>
+
+            <div className="mt-4 pt-3 border-t border-slate-800/80 flex justify-between items-center text-xs">
+              <span className="text-purple-300/80 font-medium">ነጻ የሽልማት እጣ</span>
+              <span className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black px-4 py-2 rounded-xl text-xs shadow-md flex items-center gap-1">
                 <span>የካዝና እጣ ይመልከቱ</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-4 h-4" />
               </span>
             </div>
           </div>
+        </div>
+      )}
 
+      {/* Bingo Hub (5 Active Bingo Rooms) */}
+      {activeTab === 'bingo' && (
+        <>
           {/* Active Admin Indicator & Switcher */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 space-y-3 shadow-xl backdrop-blur-md">
             <div className="flex justify-between items-center">
@@ -392,8 +449,8 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
                   <span className="text-sm font-bold text-white">
                     {currentAdmin.display_name}
                   </span>
-                  <span className="text-[11px] text-slate-400">
-                    (@{currentAdmin.telegram_username?.replace(/^@/, '')})
+                  <span className={`text-[11px] px-2 py-0.5 rounded-md border font-semibold ${adminTheme.bg}`}>
+                    @{currentAdmin.telegram_username?.replace(/^@/, '')}
                   </span>
                 </div>
               </div>
@@ -418,24 +475,30 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
                   የሂሳብና አሸናፊነት ወኪልዎን ይምረጡ:
                 </span>
                 <div className="space-y-1">
-                  {admins.map((adm) => (
-                    <button
-                      key={adm.id}
-                      onClick={() => {
-                        triggerHaptic('medium');
-                        if (onSelectAdmin) onSelectAdmin(adm);
-                        setShowAdminPicker(false);
-                      }}
-                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs transition-all ${
-                        currentAdmin.id === adm.id
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                          : 'bg-slate-950/60 hover:bg-slate-800 text-slate-300 border border-slate-800/80'
-                      }`}
-                    >
-                      <span className="font-bold">{adm.display_name}</span>
-                      {currentAdmin.id === adm.id && <Check className="w-4 h-4 text-amber-400" />}
-                    </button>
-                  ))}
+                  {admins.map((adm) => {
+                    const badge = getAdminBadgeColor(adm.slug);
+                    return (
+                      <button
+                        key={adm.id}
+                        onClick={() => {
+                          triggerHaptic('medium');
+                          if (onSelectAdmin) onSelectAdmin(adm);
+                          setShowAdminPicker(false);
+                        }}
+                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs transition-all ${
+                          currentAdmin.id === adm.id
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                            : 'bg-slate-950/60 hover:bg-slate-800 text-slate-300 border border-slate-800/80'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${badge.dot}`} />
+                          <span className="font-bold">{adm.display_name}</span>
+                        </div>
+                        {currentAdmin.id === adm.id && <Check className="w-4 h-4 text-amber-400" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -460,22 +523,24 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
             </div>
           </div>
 
-          {/* 6 Bingo Room Sections Grid */}
+          {/* 5 Bingo Room Sections Grid */}
           <div className="space-y-3 pt-1">
             <div className="flex justify-between items-center px-1">
               <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                6 የቀጥታ የቢንጎ ክፍሎች
+                5 የቀጥታ የቢንጎ ክፍሎች
               </span>
               <span className="text-[11px] text-amber-400 font-semibold">
                 እስከ 400 ተጫዋቾች
               </span>
             </div>
 
-            {groups.map((group) => {
-              const hasMinBalance = userBalance >= group.min_balance;
-              const theme = getGroupTheme(group.slug, group.stake_amount, group.name);
-              const roomPlayersCount = group.online_players_count || Math.floor(realOnlineTotal / 6) + 3;
-              const estimatedPot = Math.round(group.stake_amount * roomPlayersCount * 0.9);
+            {groups
+              .filter((group) => group.stake_amount !== 5 && !group.slug.includes('beginner'))
+              .map((group) => {
+                const hasMinBalance = userBalance >= group.min_balance;
+                const theme = getGroupTheme(group.slug, group.stake_amount);
+                const roomPlayersCount = group.online_players_count || Math.floor(realOnlineTotal / 5) + 3;
+                const estimatedPot = Math.round(group.stake_amount * roomPlayersCount * 0.9);
 
               return (
                 <div

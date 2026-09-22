@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, Admin, UserFinancialRequest } from '../lib/supabase';
 import { parseTransactionMessage } from '../utils/transactionParser';
-import { CheckCircle, ArrowDownToLine, ArrowUpFromLine, Shield, RefreshCw, Send, DollarSign, UploadCloud, Image, Eye, TrendingUp, BarChart3, X, Lock } from 'lucide-react';
+import { CheckCircle, ArrowDownToLine, ArrowUpFromLine, Shield, RefreshCw, Send, DollarSign, UploadCloud, Image, Eye, TrendingUp, BarChart3, X, Lock, CreditCard } from 'lucide-react';
 import { SecurityPinModal } from './SecurityPinModal';
 import { getSecuritySession } from '../utils/securitySession';
 import { triggerHaptic } from '../utils/telegram';
@@ -15,7 +15,7 @@ export const AdminFinancialManager: React.FC<AdminFinancialManagerProps> = ({
   currentAdmin,
   onRefreshBalances,
 }) => {
-  const [activeTab, setActiveTab] = useState<'topups' | 'cashouts' | 'buy_credits' | 'ledger' | 'analytics'>('topups');
+  const [activeTab, setActiveTab] = useState<'topups' | 'cashouts' | 'buy_credits' | 'accounts' | 'ledger' | 'analytics'>('topups');
   const [requests, setRequests] = useState<UserFinancialRequest[]>([]);
   const [payoutMessage, setPayoutMessage] = useState<{ [key: string]: string }>({});
   const [payoutTxnId, setPayoutTxnId] = useState<{ [key: string]: string }>({});
@@ -39,6 +39,17 @@ export const AdminFinancialManager: React.FC<AdminFinancialManagerProps> = ({
   const [creditReceiptImage, setCreditReceiptImage] = useState<string | null>(null);
   const [creditBuyStatus, setCreditBuyStatus] = useState<string | null>(null);
 
+  // Payment Accounts Form State
+  const [telebirrAccount, setTelebirrAccount] = useState<string>('');
+  const [telebirrName, setTelebirrName] = useState<string>('');
+  const [cbeAccount, setCbeAccount] = useState<string>('');
+  const [cbeName, setCbeName] = useState<string>('');
+  const [bankName, setBankName] = useState<string>('');
+  const [bankAccount, setBankAccount] = useState<string>('');
+  const [bankAccountName, setBankAccountName] = useState<string>('');
+  const [accountsStatus, setAccountsStatus] = useState<string | null>(null);
+  const [isSavingAccounts, setIsSavingAccounts] = useState<boolean>(false);
+
   // Admin Ledger Summary & Profitability
   const [ledgerEntries, setLedgerEntries] = useState<any[]>([]);
   const [weeklyProfits, setWeeklyProfits] = useState<{ day: string; bingoCut: number; lottoCut: number; total: number }[]>([]);
@@ -50,6 +61,61 @@ export const AdminFinancialManager: React.FC<AdminFinancialManagerProps> = ({
       loadProfitability();
     }
   }, [currentAdmin?.id, activeTab]);
+
+  useEffect(() => {
+    if (currentAdmin) {
+      setTelebirrAccount(currentAdmin.telebirr_account || '');
+      setTelebirrName(currentAdmin.telebirr_account_name || '');
+      setCbeAccount(currentAdmin.cbe_account || '');
+      setCbeName(currentAdmin.cbe_account_name || '');
+      setBankName(currentAdmin.bank_name || '');
+      setBankAccount(currentAdmin.bank_account || '');
+      setBankAccountName(currentAdmin.bank_account_name || '');
+    }
+  }, [currentAdmin]);
+
+  const executeSaveAccounts = async () => {
+    if (!currentAdmin?.id) return;
+    setIsSavingAccounts(true);
+    setAccountsStatus(null);
+    try {
+      const { data, error } = await supabase.rpc('admin_update_payment_accounts', {
+        p_admin_id: currentAdmin.id,
+        p_telebirr_account: telebirrAccount.trim() || null,
+        p_telebirr_account_name: telebirrName.trim() || null,
+        p_cbe_account: cbeAccount.trim() || null,
+        p_cbe_account_name: cbeName.trim() || null,
+        p_bank_name: bankName.trim() || null,
+        p_bank_account: bankAccount.trim() || null,
+        p_bank_account_name: bankAccountName.trim() || null,
+      });
+
+      if (error || !data?.success) {
+        setAccountsStatus(`❌ ስህተት: ${data?.error || error?.message || 'አካውንት ማስተካከል አልተቻለም'}`);
+      } else {
+        setAccountsStatus('✅ የክፍያ አካውንቶች በተሳካ ሁኔታ ተቀምጠዋል! ተጫዋቾች በገቢ ወጪ ውስጥ ያዩታል።');
+        if (onRefreshBalances) onRefreshBalances();
+      }
+    } catch (e: any) {
+      setAccountsStatus(`❌ ስህተት: ${e?.message}`);
+    } finally {
+      setIsSavingAccounts(false);
+    }
+  };
+
+  const handleSaveAccounts = () => {
+    if (!currentAdmin?.id) return;
+    const hasSession = getSecuritySession('admin', currentAdmin.id);
+    if (!hasSession) {
+      setPinModalConfig({
+        isOpen: true,
+        actionTitle: 'የክፍያ አካውንቶች ማስተካከያ (Payment Accounts Setup)',
+        onExecute: executeSaveAccounts,
+      });
+      return;
+    }
+    executeSaveAccounts();
+  };
 
   const loadRequests = async () => {
     if (!currentAdmin?.id) return;
@@ -254,34 +320,34 @@ export const AdminFinancialManager: React.FC<AdminFinancialManagerProps> = ({
       </div>
 
       {/* Navigation Sub-Tabs */}
-      <div className="grid grid-cols-5 gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-2xl">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-2xl">
         <button
           onClick={() => setActiveTab('topups')}
-          className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 ${
             activeTab === 'topups'
               ? 'bg-amber-500 text-slate-950 shadow-md'
               : 'text-slate-400 hover:text-white'
           }`}
         >
           <ArrowDownToLine className="w-3.5 h-3.5" />
-          <span>Top-Ups ({pendingTopups.length})</span>
+          <span>Top-Up ({pendingTopups.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('cashouts')}
-          className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 ${
             activeTab === 'cashouts'
               ? 'bg-emerald-500 text-slate-950 shadow-md'
               : 'text-slate-400 hover:text-white'
           }`}
         >
           <ArrowUpFromLine className="w-3.5 h-3.5" />
-          <span>Cash-Outs ({pendingCashouts.length})</span>
+          <span>Cash-Out ({pendingCashouts.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('buy_credits')}
-          className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 ${
             activeTab === 'buy_credits'
               ? 'bg-blue-500 text-white shadow-md'
               : 'text-slate-400 hover:text-white'
@@ -292,8 +358,20 @@ export const AdminFinancialManager: React.FC<AdminFinancialManagerProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveTab('accounts')}
+          className={`py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+            activeTab === 'accounts'
+              ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <CreditCard className="w-3.5 h-3.5" />
+          <span>አካውንቶች</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('ledger')}
-          className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 ${
             activeTab === 'ledger'
               ? 'bg-purple-500 text-white shadow-md'
               : 'text-slate-400 hover:text-white'
@@ -304,14 +382,14 @@ export const AdminFinancialManager: React.FC<AdminFinancialManagerProps> = ({
 
         <button
           onClick={() => setActiveTab('analytics')}
-          className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 ${
             activeTab === 'analytics'
-              ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md'
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md'
               : 'text-slate-400 hover:text-white'
           }`}
         >
           <BarChart3 className="w-3.5 h-3.5" />
-          <span>Profitability</span>
+          <span>ትርፍ</span>
         </button>
       </div>
 
@@ -593,6 +671,143 @@ export const AdminFinancialManager: React.FC<AdminFinancialManagerProps> = ({
             <span>Submit Credit Request to Super Admin</span>
           </button>
         </form>
+      )}
+
+      {/* 4. Payment Accounts Setup Tab */}
+      {activeTab === 'accounts' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+          <div>
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-amber-400" />
+              <h3 className="text-sm font-black text-white">የክፍያ አካውንቶች ማስተካከያ (Payment Accounts)</h3>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              እዚህ ያስቀመጧቸው የቴሌብርና የባንክ አካውንቶች ተጫዋቾች ሂሳብ ሲሞሉ (Top-Up) በቀጥታ ይታያሉ።
+            </p>
+          </div>
+
+          <div className="space-y-4 pt-2">
+            {/* Telebirr Details */}
+            <div className="p-3.5 bg-slate-950/80 border border-amber-500/20 rounded-xl space-y-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                <span>ቴሌብር (Telebirr) አካውንት</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">ስልክ ቁጥር (Telebirr Phone/No)</label>
+                  <input
+                    type="text"
+                    value={telebirrAccount}
+                    onChange={(e) => setTelebirrAccount(e.target.value)}
+                    placeholder="0911223344"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">የስም ሙሉ (Account Name)</label>
+                  <input
+                    type="text"
+                    value={telebirrName}
+                    onChange={(e) => setTelebirrName(e.target.value)}
+                    placeholder="Abebe Kebede"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* CBE Details */}
+            <div className="p-3.5 bg-slate-950/80 border border-purple-500/20 rounded-xl space-y-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-purple-300">
+                <span className="w-2 h-2 rounded-full bg-purple-400" />
+                <span>የኢትዮጵያ ንግድ ባንክ (CBE) አካውንት</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">የሂሳብ ቁጥር (CBE Account No)</label>
+                  <input
+                    type="text"
+                    value={cbeAccount}
+                    onChange={(e) => setCbeAccount(e.target.value)}
+                    placeholder="1000123456789"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">የስም ሙሉ (Account Name)</label>
+                  <input
+                    type="text"
+                    value={cbeName}
+                    onChange={(e) => setCbeName(e.target.value)}
+                    placeholder="Abebe Kebede"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Other Bank Details */}
+            <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                <span className="w-2 h-2 rounded-full bg-slate-400" />
+                <span>ተጨማሪ ባንክ (አዋሽ/ዳሸን/አቢሲንያ ወዘተ)</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">የባንኩ ስም (Bank Name)</label>
+                  <input
+                    type="text"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    placeholder="Awash / Dashen / Abyssinia"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-slate-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">የሂሳብ ቁጥር (Account No)</label>
+                  <input
+                    type="text"
+                    value={bankAccount}
+                    onChange={(e) => setBankAccount(e.target.value)}
+                    placeholder="01320495830200"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-slate-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">የስም ሙሉ (Account Name)</label>
+                  <input
+                    type="text"
+                    value={bankAccountName}
+                    onChange={(e) => setBankAccountName(e.target.value)}
+                    placeholder="Abebe Kebede"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-slate-500"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {accountsStatus && (
+            <div className={`p-3 rounded-xl text-xs font-medium border ${
+              accountsStatus.startsWith('✅')
+                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                : 'bg-red-500/15 text-red-300 border-red-500/30'
+            }`}>
+              {accountsStatus}
+            </div>
+          )}
+
+          <button
+            type="button"
+            disabled={isSavingAccounts}
+            onClick={handleSaveAccounts}
+            className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg active:scale-98 transition-all disabled:opacity-50"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span>{isSavingAccounts ? 'በማስቀመጥ ላይ...' : 'አካውንቶችን አስቀምጥ (Save Accounts)'}</span>
+          </button>
+        </div>
       )}
 
       {/* 4. Ledger Tab */}

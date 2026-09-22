@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
-import { Wifi, WifiOff, SignalLow, SignalMedium, SignalHigh } from 'lucide-react';
+import { Wifi, WifiOff, SignalLow, SignalMedium, SignalHigh, X } from 'lucide-react';
 
 interface NetworkQualityIndicatorProps {
   compact?: boolean;
@@ -15,6 +16,7 @@ export function NetworkQualityIndicator({
   isReconnecting = false
 }: NetworkQualityIndicatorProps) {
   const { quality, showNetworkWarning } = useNetworkQuality();
+  const [isDismissed, setIsDismissed] = useState(false);
 
   if (compact) {
     const getStatusColor = () => {
@@ -48,52 +50,55 @@ export function NetworkQualityIndicator({
     );
   }
 
-  if (!showNetworkWarning && !isReconnecting) {
+  if (isDismissed || (!showNetworkWarning && !isReconnecting)) {
     return null;
   }
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 z-50">
-      <div className={`border rounded-lg p-3 shadow-lg ${
+    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 z-50 animate-fadeIn">
+      <div className={`border rounded-xl p-3.5 shadow-2xl relative backdrop-blur-md ${
         !quality.isOnline
-          ? 'bg-red-50 border-red-200'
+          ? 'bg-red-950/90 border-red-500/50 text-red-200'
           : isReconnecting
-            ? 'bg-blue-50 border-blue-200'
-            : 'bg-yellow-50 border-yellow-200'
+            ? 'bg-blue-950/90 border-blue-500/50 text-blue-200'
+            : 'bg-slate-900/95 border-amber-500/50 text-amber-200'
       }`}>
-        <div className="flex items-start gap-3">
+        <button
+          onClick={() => setIsDismissed(true)}
+          className="absolute top-2.5 right-2.5 p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+          aria-label="Close slow connection banner"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        <div className="flex items-start gap-3 pr-6">
           {!quality.isOnline ? (
-            <WifiOff className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <WifiOff className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
           ) : isReconnecting ? (
-            <Wifi className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5 animate-pulse" />
+            <Wifi className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5 animate-pulse" />
           ) : (
-            <SignalLow className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <SignalLow className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
           )}
           <div className="flex-1">
-            <p className={`font-semibold text-sm ${
-              !quality.isOnline ? 'text-red-900' : isReconnecting ? 'text-blue-900' : 'text-yellow-900'
-            }`}>
-              {!quality.isOnline ? 'Offline' : isReconnecting ? 'Reconnecting...' : 'Slow Connection'}
+            <p className="font-bold text-sm text-white">
+              {!quality.isOnline ? 'መስመር ተቋርጧል (Offline)' : isReconnecting ? 'እየተገናኘ ነው... (Reconnecting)' : 'ቀስተኛ መስመር (Slow Connection)'}
             </p>
-            <p className={`text-xs mt-1 ${
-              !quality.isOnline ? 'text-red-700' : isReconnecting ? 'text-blue-700' : 'text-yellow-700'
-            }`}>
+            <p className="text-xs mt-1 text-gray-300">
               {!quality.isOnline ? (
                 <>
-                  Actions will sync when connection is restored
+                  መስመር ሲመለስ ተግባራት ይቀጥላሉ
                   {pendingActions > 0 && (
-                    <span className="block mt-1 font-medium">
-                      {pendingActions} pending action{pendingActions !== 1 ? 's' : ''}
+                    <span className="block mt-1 font-medium text-amber-400">
+                      {pendingActions} በመጠባበቅ ላይ ያለ
                     </span>
                   )}
                 </>
               ) : isReconnecting ? (
-                'Attempting to restore connection...'
+                'ግንኙነትን መልሶ ለመመስረት እየሞከረ ነው...'
               ) : (
                 <>
                   Latency: {quality.latency}ms | Speed: {quality.bandwidth}
                   <br />
-                  Game updates may be delayed
+                  የጨዋታ ቁጥሮች መዘግየት ሊያጋጥማቸው ይችላል
                 </>
               )}
             </p>
