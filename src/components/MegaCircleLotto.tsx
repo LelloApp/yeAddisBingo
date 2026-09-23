@@ -20,6 +20,9 @@ import { triggerHaptic } from '../utils/telegram';
 import {
   getEarthMoonDistanceInfo,
   getActiveDistanceSlice,
+  buildDistanceInfoFromMeters,
+  syncServerCosmicSeed,
+  calculateEarthMoonDistanceMeters,
   LunarDistanceInfo,
   ActiveDistanceSlice,
 } from '../utils/lunarDistance';
@@ -65,6 +68,7 @@ interface MegaCircleLottoProps {
   yesterdayPot?: number;
   drawTime: Date; // e.g. 18:00 (ማታ 12 ሰአት) or 19:00 (ማታ 1 ሰአት) EAT
   isSuperBonus?: boolean;
+  roundId?: string;
   onDrawCompleted?: (winners: LottoWinnerItem[]) => void;
   savedWinners?: LottoWinnerItem[];
   isDemoModeAllowed?: boolean;
@@ -105,6 +109,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
   yesterdayPot = 0,
   drawTime,
   isSuperBonus = false,
+  roundId,
   onDrawCompleted,
   savedWinners = [],
   isDemoModeAllowed = true,
@@ -114,6 +119,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
   const [pointerAngle, setPointerAngle] = useState<number>(0);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [isDemoRunning, setIsDemoRunning] = useState<boolean>(false);
+  const [isInFinalInspection, setIsInFinalInspection] = useState<boolean>(false);
   const [currentDrawingRank, setCurrentDrawingRank] = useState<number>(1);
   const [celebratingWinner, setCelebratingWinner] = useState<LottoWinnerItem | null>(null);
   const [celebrationCountdown, setCelebrationCountdown] = useState<number>(0);
@@ -137,6 +143,8 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
   const audioCtxRef = useRef<AudioContext | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const isCancelledRef = useRef<boolean>(false);
+  const serverFrozenSeedRef = useRef<number | null>(null);
+  const lastSyncCheckRef = useRef<number>(0);
 
   // Sync incoming tokens
   useEffect(() => {
@@ -197,42 +205,56 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     return getActiveDistanceSlice(distanceInfo, activeTokens.length);
   }, [distanceInfo, activeTokens.length]);
 
-  // Multi-tier Earth-Moon Distance Polling (Hourly, 5-min in last hour, 5s in last min)
+  // Real-time Local Earth-Moon Distance Projection + Scheduled Server Discrepancy Checks
+  // - Changes LIVE smoothly on UI every second with ZERO DB reads and ZERO network spam
+  // - Discrepancy checks at designated checkpoints (hourly, 5min in last hr, 5s in last min)
+  // - Server enforces a SINGLE authoritative seed across all users
   useEffect(() => {
-    const updateDistance = () => {
+    const timer = setInterval(() => {
       const now = new Date();
       const diffMs = drawTime.getTime() - now.getTime();
       const sec = Math.max(0, Math.floor(diffMs / 1000));
       setTimeUntilDrawSec(sec);
 
-      // Only recompute distance if draw time has not passed (freezes at draw time)
-      if (sec > 0 && !isDrawing) {
+      // Local continuous live projection in memory (0 DB / 0 network calls!)
+      if (sec > 0 && !isDrawing && !serverFrozenSeedRef.current) {
         setDistanceInfo(getEarthMoonDistanceInfo(now));
       }
-    };
 
-    updateDistance();
+      // Checkpoint Discrepancy Schedule:
+      // Hourly if > 1 hour, every 5 min if in last hour, every 5s if in last minute
+      let checkIntervalMs = 3600000;
+      if (sec <= 60 && sec > 0) {
+        checkIntervalMs = 5000;
+      } else if (sec <= 3600 && sec > 0) {
+        checkIntervalMs = 300000;
+      }
 
-    // Determine interval dynamic rate:
-    let intervalMs = 3600000; // 1 hour
-    if (timeUntilDrawSec <= 60 && timeUntilDrawSec > 0) {
-      intervalMs = 5000; // 5 seconds
-    } else if (timeUntilDrawSec <= 3600 && timeUntilDrawSec > 0) {
-      intervalMs = 300000; // 5 minutes
-    }
-
-    const interval = setInterval(updateDistance, intervalMs);
-    const secTimer = setInterval(() => {
-      const now = new Date();
-      const sec = Math.max(0, Math.floor((drawTime.getTime() - now.getTime()) / 1000));
-      setTimeUntilDrawSec(sec);
+      const nowMs = now.getTime();
+      if (
+        roundId &&
+        (nowMs - lastSyncCheckRef.current >= checkIntervalMs || (sec === 0 && !serverFrozenSeedRef.current))
+      ) {
+        lastSyncCheckRef.current = nowMs;
+        syncServerCosmicSeed({
+          roundId,
+          isSuperBonus,
+          localSeed: calculateEarthMoonDistanceMeters(now),
+        })
+          .then(({ seed, source }) => {
+            if (source === 'server-authority') {
+              serverFrozenSeedRef.current = seed;
+              setDistanceInfo(buildDistanceInfoFromMeters(seed, 'scheduled-freeze'));
+            }
+          })
+          .catch(() => {
+            // Silently fallback to locally calculated Meeus value
+          });
+      }
     }, 1000);
 
-    return () => {
-      clearInterval(interval);
-      clearInterval(secTimer);
-    };
-  }, [drawTime, timeUntilDrawSec, isDrawing]);
+    return () => clearInterval(timer);
+  }, [drawTime, isDrawing, roundId, isSuperBonus]);
 
   // Sound Synthesizer (Ticks & Fanfare)
   const playTickSound = (freq = 900) => {
@@ -357,6 +379,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     }
     setIsDrawing(false);
     setIsDemoRunning(false);
+    setIsInFinalInspection(false);
     setCelebratingWinner(null);
     setWinners(savedWinners);
     setActiveTokens(tokens);
@@ -374,7 +397,24 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     setIsDrawing(true);
     triggerHaptic('heavy');
 
-    const slice = getActiveDistanceSlice(distanceInfo, pool.length);
+    let currentSeedInfo = distanceInfo;
+    // For official live draw, ensure single source of truth from server
+    if (!isDemo && roundId) {
+      try {
+        const { seed } = await syncServerCosmicSeed({
+          roundId,
+          isSuperBonus,
+          localSeed: distanceInfo.distanceMeters,
+        });
+        serverFrozenSeedRef.current = seed;
+        currentSeedInfo = buildDistanceInfoFromMeters(seed, 'scheduled-freeze');
+        setDistanceInfo(currentSeedInfo);
+      } catch {
+        // Local fallback
+      }
+    }
+
+    const slice = getActiveDistanceSlice(currentSeedInfo, pool.length);
     const stepsCount = slice.sliceValue;
 
     setStatusMessage(
@@ -385,6 +425,12 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
   };
 
   // Spin Pointer Physics driven token-by-token by Earth-Moon distance seed
+  // ALL LEVEL WINNERS follow the EXACT SAME drawing steps!
+  // - Drawing duration per winner: max 3 minutes (180s)
+  // - Minimum speed: 1 token per second
+  // - The last 2 rounds (revolutions) are slower for users to inspect the movement
+  // - The last 2 rounds never exceed 1 minute (60s)
+  // - Live ዙር & እጣ ቁጥር counters update synchronously
   const spinPointerToWinner = async (
     targetRank: number,
     totalSteps: number,
@@ -402,22 +448,38 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       const winnerIdx = totalSteps % N;
       const chosenToken = pool[winnerIdx];
 
-      // Calculate total angle delta (Full revolutions + target token position)
-      // Base revolutions: at least 3-5 full rounds for dramatic flair
-      const extraRounds = targetRank === 1 ? (isDemo ? 4 : 8) : 2;
-      const targetTokenAngle = (winnerIdx / N) * 360;
-      const startAngle = pointerAngle % 360;
-      const totalAngleDelta = extraRounds * 360 + (targetTokenAngle - startAngle);
+      // Exact uniform structure for ALL 10 ranks:
+      // Early fast rounds + 2 last slower inspection rounds = Total rounds
+      const earlyRounds = isDemo ? 2 : 4;
+      const lastRounds = 2; // Exactly 2 full rounds for final token-by-token inspection
+      const totalRounds = earlyRounds + lastRounds;
 
-      // Duration limits:
-      // The last 2 rounds must not exceed 60 seconds!
-      // If tokens < 30: 1 token / sec (<= 60s). If tokens >= 30: capped so 2 rounds <= 60s.
-      const tokensIn2Rounds = N * 2;
-      const last2RoundsDurationMs = Math.min(60000, tokensIn2Rounds * (N <= 30 ? 1000 : 500));
-      // Total stage duration: 15-20s for demo, up to 90s for live draw
-      const totalDurationMs = isDemo
-        ? (targetRank === 1 ? 16000 : 3500)
-        : Math.min(110000, last2RoundsDurationMs + 25000);
+      const targetTokenAngle = (winnerIdx / N) * 360;
+      const startAngle = pointerAngle;
+      const earlyAngleDelta = earlyRounds * 360;
+      const currentStartNorm = ((startAngle % 360) + 360) % 360;
+      const landingOffsetAngle = (targetTokenAngle - currentStartNorm + 360) % 360;
+      const last2AngleDelta = lastRounds * 360 + landingOffsetAngle;
+      const totalAngleDelta = earlyAngleDelta + last2AngleDelta;
+
+      // DURATION & SPEED LIMITS:
+      // 1. Last 2 rounds:
+      //    - If tokens are few (<= 30): at 1 token/sec, 2 * N <= 60 seconds (never exceeds 1 min).
+      //    - If tokens are many (> 30): capped at maximum 60,000 ms (1 minute).
+      // 2. Entire winner drawing:
+      //    - Must NOT exceed 3 minutes (180 seconds).
+      //    - Minimum speed is 1 token per second.
+      const tokensInLast2Rounds = N * 2;
+      const last2RoundsDurationMs = isDemo
+        ? Math.min(8000, Math.max(3000, tokensInLast2Rounds * 80))
+        : Math.min(60000, tokensInLast2Rounds * 1000); // 1 token/sec when N <= 30; capped at 60s when N > 30!
+
+      // Early rounds duration (clamped so total duration <= 180 seconds / 3 minutes):
+      const earlyDurationMs = isDemo
+        ? 3500
+        : Math.min(120000, Math.max(8000, earlyRounds * N * 100));
+
+      const totalDurationMs = earlyDurationMs + last2RoundsDurationMs;
 
       const startTime = performance.now();
       let lastStepTicked = -1;
@@ -429,32 +491,55 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         }
 
         const elapsed = currentTime - startTime;
-        const progress = Math.min(1, elapsed / totalDurationMs);
+        let currentAngle = startAngle;
+        let isLast2Phase = false;
+        let roundsRemaining = totalRounds;
 
-        // Decelerating quartic curve for immense casino suspense
-        const easeOut = 1 - Math.pow(1 - progress, 3.8);
-        const currentAngle = startAngle + totalAngleDelta * easeOut;
+        if (elapsed < earlyDurationMs) {
+          // PHASE 1: Early Fast Rounds
+          const p1 = elapsed / earlyDurationMs;
+          // Smooth progressive cubic hermite curve
+          const ease1 = p1 * p1 * (3 - 2 * p1);
+          currentAngle = startAngle + earlyAngleDelta * ease1;
+
+          const angleTraversed = currentAngle - startAngle;
+          roundsRemaining = Math.max(2, Math.ceil((totalAngleDelta - angleTraversed) / 360));
+          setIsInFinalInspection(false);
+        } else {
+          // PHASE 2: The Last 2 Rounds (Slower for users to inspect the movement)
+          isLast2Phase = true;
+          setIsInFinalInspection(true);
+          const elapsed2 = Math.min(last2RoundsDurationMs, elapsed - earlyDurationMs);
+          const p2 = elapsed2 / last2RoundsDurationMs;
+          // Decelerating cubic curve for close inspection
+          const ease2 = 1 - Math.pow(1 - p2, 2.6);
+          currentAngle = startAngle + earlyAngleDelta + last2AngleDelta * ease2;
+
+          const angleTraversed = currentAngle - startAngle;
+          roundsRemaining = Math.max(0, Math.ceil((totalAngleDelta - angleTraversed) / 360));
+        }
+
         setPointerAngle(currentAngle);
+        setRevolutionCount(roundsRemaining);
 
-        // Compute live revolution count (ዙር)
-        const currentRotations = Math.floor(currentAngle / 360);
-        setRevolutionCount(Math.max(0, currentRotations));
-
-        // Compute step-by-step distance countdown (እጣ ቁጥር down to 0)
-        const stepsRemaining = Math.max(0, Math.round(totalSteps * (1 - easeOut)));
+        // Step-by-step distance countdown down to 0
+        const progressOverall = Math.min(1, elapsed / totalDurationMs);
+        const stepsRemaining = Math.max(0, Math.round(totalSteps * (1 - Math.pow(progressOverall, 1.8))));
         setCountdownStep(stepsRemaining);
 
-        // Play ticker audio on each token step
+        // Play ticker audio on each token step (crisp and slower during last 2 rounds)
         if (stepsRemaining !== lastStepTicked) {
-          playTickSound(targetRank === 1 ? 780 : 880);
+          playTickSound(isLast2Phase ? 720 : 880);
           lastStepTicked = stepsRemaining;
         }
 
-        if (progress < 1) {
+        if (elapsed < totalDurationMs) {
           animationFrameRef.current = requestAnimationFrame(animate);
         } else {
           // Lands precisely at countdownStep = 0!
           setCountdownStep(0);
+          setRevolutionCount(0);
+          setIsInFinalInspection(false);
           handleWinnerLanded(chosenToken, targetRank, isDemo, pool);
           resolve();
         }
@@ -631,8 +716,15 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
               <Moon className="w-4 h-4 text-cyan-400" />
               <span>የዛሬው የጨረቃና የምድር ርቀት (9 ዲጂት):</span>
             </div>
-            <span className="text-[10px] text-slate-400 font-mono">
-              {timeUntilDrawSec > 0 ? '🟢 በየጊዜው ይዘምናል' : '🔒 ቆሟል'}
+            <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+              {timeUntilDrawSec > 0 ? (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
+                  <span className="text-emerald-400 font-semibold">የቀጥታ ቆጣሪ (Live)</span>
+                </>
+              ) : (
+                <span className="text-amber-400">🔒 በይፋዊ እጣ ሰዓት ቆሟል</span>
+              )}
             </span>
           </div>
 
@@ -752,16 +844,22 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
 
       {/* The Mega Circle (3D Wooden Casino Wheel with Black & White Roulette Sectors) */}
       <div className="bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-4 shadow-2xl relative flex flex-col items-center">
-        {/* Live Revolver Counters Bar (ዙር & እጣ ቁጥር) */}
+        {/* Live Revolver Counters Bar (ዙር & እጣ ቁጥር & የመጨረሻ 2 ዙሮች) */}
         {isDrawing && (
-          <div className="w-full mb-3 flex justify-between items-center bg-slate-950/90 px-4 py-2 rounded-2xl border border-amber-500/40 animate-pulse text-xs">
+          <div className="w-full mb-3 flex flex-wrap justify-between items-center bg-slate-950/95 px-4 py-2.5 rounded-2xl border border-amber-500/40 text-xs gap-2">
             <div className="flex items-center gap-1.5 text-cyan-400 font-bold font-mono">
-              <Compass className="w-4 h-4" />
-              <span>ዙር: <b className="text-white text-sm">{revolutionCount}</b></span>
+              <Compass className="w-4 h-4 text-cyan-400" />
+              <span>ዙር: <b className="text-white text-sm bg-slate-800 px-2 py-0.5 rounded">{revolutionCount}</b></span>
             </div>
 
+            {isInFinalInspection && (
+              <div className="flex items-center gap-1 text-emerald-400 font-extrabold bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 rounded-full text-[11px] animate-pulse">
+                <span>👀 የመጨረሻ 2 ዙሮች (የፍተሻ ፍጥነት)</span>
+              </div>
+            )}
+
             <div className="flex items-center gap-1.5 text-amber-400 font-bold font-mono">
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-4 h-4 text-amber-400" />
               <span>እጣ ቁጥር ቆጣሪ: <b className="text-white text-base bg-amber-500/20 px-2 py-0.5 rounded border border-amber-400">{countdownStep}</b></span>
             </div>
           </div>

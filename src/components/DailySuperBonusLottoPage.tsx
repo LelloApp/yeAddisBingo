@@ -20,6 +20,7 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
   const [totalPot, setTotalPot] = useState<number>(0);
   const [userTokensCount, setUserTokensCount] = useState<number>(0);
   const [savedWinners, setSavedWinners] = useState<LottoWinnerItem[]>([]);
+  const [currentRoundId, setCurrentRoundId] = useState<string | undefined>(undefined);
 
   // Calculate draw time for today 19:00 EAT (16:00 UTC)
   const drawTime = React.useMemo(() => {
@@ -56,6 +57,7 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
       .maybeSingle();
 
     if (round) {
+      setCurrentRoundId(round.id);
       // 3. Fetch tokens
       const { data: tokenRows } = await supabase
         .from('daily_lotto_super_bonus_tokens')
@@ -156,6 +158,7 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
         totalPot={totalPot}
         drawTime={drawTime}
         isSuperBonus={true}
+        roundId={currentRoundId}
         savedWinners={savedWinners}
         onDrawCompleted={(winners) => setSavedWinners(winners)}
       />

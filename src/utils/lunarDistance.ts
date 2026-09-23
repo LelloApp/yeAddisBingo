@@ -68,20 +68,66 @@ export function calculateEarthMoonDistanceMeters(date: Date = new Date()): numbe
 }
 
 /**
+ * Builds LunarDistanceInfo from an integer meter value
+ */
+export function buildDistanceInfoFromMeters(
+  meters: number,
+  source: LunarDistanceInfo['source'] = 'astronomical-ephemeris'
+): LunarDistanceInfo {
+  const clamped = Math.max(350000000, Math.min(410000000, Math.round(meters)));
+  const distanceStr = String(clamped).padStart(9, '0');
+  const formattedMeters = clamped.toLocaleString('en-US');
+
+  return {
+    distanceMeters: clamped,
+    distanceStr,
+    formattedMeters,
+    timestamp: new Date().toISOString(),
+    source,
+  };
+}
+
+/**
  * Returns 9-digit distance info object
  */
 export function getEarthMoonDistanceInfo(date: Date = new Date()): LunarDistanceInfo {
   const meters = calculateEarthMoonDistanceMeters(date);
-  const distanceStr = String(meters).padStart(9, '0');
-  const formattedMeters = meters.toLocaleString('en-US');
+  return buildDistanceInfoFromMeters(meters, 'astronomical-ephemeris');
+}
 
-  return {
-    distanceMeters: meters,
-    distanceStr,
-    formattedMeters,
-    timestamp: date.toISOString(),
-    source: 'astronomical-ephemeris',
-  };
+/**
+ * Syncs the single source-of-truth cosmic seed with Supabase.
+ * - If server already has a seed recorded for this round, returns it.
+ * - If not, commits the local seed so all other users receive the exact same seed.
+ * - If network call fails, silently returns the local seed as fallback.
+ * Zero database spam: called strictly at designated check intervals or draw initiation.
+ */
+export async function syncServerCosmicSeed(params: {
+  roundId?: string;
+  isSuperBonus?: boolean;
+  localSeed: number;
+}): Promise<{ seed: number; source: 'server-authority' | 'local-fallback' }> {
+  const { roundId, isSuperBonus = false, localSeed } = params;
+  if (!roundId) {
+    return { seed: localSeed, source: 'local-fallback' };
+  }
+
+  try {
+    const { supabase } = await import('../lib/supabase');
+    const { data, error } = await supabase.rpc('sync_or_record_lotto_cosmic_seed', {
+      p_round_id: roundId,
+      p_is_super_bonus: isSuperBonus,
+      p_client_seed: localSeed,
+    });
+
+    if (!error && data?.success && data?.seed) {
+      return { seed: Number(data.seed), source: 'server-authority' };
+    }
+  } catch {
+    // Network or offline fallback
+  }
+
+  return { seed: localSeed, source: 'local-fallback' };
 }
 
 /**
@@ -122,3 +168,4 @@ export function getActiveDistanceSlice(
     sliceValue: isNaN(sliceValue) ? 100 : sliceValue,
   };
 }
+

@@ -25,6 +25,7 @@ export const DailyLottoPage: React.FC<DailyLottoPageProps> = ({
   const [purchaseStatus, setPurchaseStatus] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [savedWinners, setSavedWinners] = useState<LottoWinnerItem[]>([]);
+  const [currentRoundId, setCurrentRoundId] = useState<string | undefined>(undefined);
 
   // Calculate draw time for today 18:00 EAT (15:00 UTC)
   const drawTime = React.useMemo(() => {
@@ -75,6 +76,7 @@ export const DailyLottoPage: React.FC<DailyLottoPageProps> = ({
       .maybeSingle();
 
     if (round) {
+      setCurrentRoundId(round.id);
       setTotalPot(Number(round.total_pot || 0));
 
       // 2. Fetch all tokens for this round
@@ -221,6 +223,7 @@ export const DailyLottoPage: React.FC<DailyLottoPageProps> = ({
         totalPot={totalPot}
         drawTime={drawTime}
         isSuperBonus={false}
+        roundId={currentRoundId}
         savedWinners={savedWinners}
         onDrawCompleted={(winners) => setSavedWinners(winners)}
       />
