@@ -70,7 +70,7 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
           telegramUserId: t.telegram_user_id,
           userName: `Winner #${String(t.telegram_user_id).slice(-4)}`,
           adminId: t.admin_id || 'parcelic',
-          adminName: t.admin_id ? 'Room Agent' : 'Parcelic Admin',
+          adminName: t.admin_id ? 'አጫዋች ክፍል' : 'ፓርሴሊክ አጫዋች',
           adminColor: '#8b5cf6',
           createdAt: t.created_at,
         }));
@@ -91,7 +91,7 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
           className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white font-bold"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Rooms</span>
+          <span>ወደ ክፍሎች ተመለስ</span>
         </button>
 
         <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
             className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 rounded-xl text-xs font-bold"
           >
             <Coins className="w-3.5 h-3.5" />
-            <span>Balance: {userBalance} ETB</span>
+            <span>ቀሪ ሂሳብ: {userBalance} ETB</span>
           </button>
         </div>
       </div>
