@@ -26,6 +26,7 @@ export const DailyLottoPage: React.FC<DailyLottoPageProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [savedWinners, setSavedWinners] = useState<LottoWinnerItem[]>([]);
   const [currentRoundId, setCurrentRoundId] = useState<string | undefined>(undefined);
+  const [serverSeed, setServerSeed] = useState<number | undefined>(undefined);
 
   // Calculate draw time for today 18:00 EAT (15:00 UTC)
   const drawTime = React.useMemo(() => {
@@ -42,7 +43,7 @@ export const DailyLottoPage: React.FC<DailyLottoPageProps> = ({
   useEffect(() => {
     loadRoundAndTokens();
 
-    // Realtime subscription: update every time a user buys a ticket!
+    // Realtime subscription: update every time a user buys an እጣ or round status changes!
     const tokensChannel = supabase
       .channel('realtime-daily-lotto-tokens')
       .on(
@@ -67,17 +68,20 @@ export const DailyLottoPage: React.FC<DailyLottoPageProps> = ({
   }, []);
 
   const loadRoundAndTokens = async () => {
-    // 1. Fetch current open round
+    // 1. Fetch current open or drawing round
     const { data: round } = await supabase
       .from('daily_lotto_rounds')
       .select('*')
-      .eq('status', 'open')
+      .in('status', ['open', 'drawing'])
       .order('created_at', { ascending: false })
       .maybeSingle();
 
     if (round) {
       setCurrentRoundId(round.id);
       setTotalPot(Number(round.total_pot || 0));
+      if (round.cosmic_distance_seed) {
+        setServerSeed(Number(round.cosmic_distance_seed));
+      }
 
       // 2. Fetch all tokens for this round
       const { data: tokenRows } = await supabase
@@ -91,7 +95,7 @@ export const DailyLottoPage: React.FC<DailyLottoPageProps> = ({
           id: t.id,
           tokenNumber: t.token_number || idx + 1,
           telegramUserId: t.telegram_user_id,
-          userName: `User #${String(t.telegram_user_id).slice(-4)}`,
+          userName: `ተጫዋች #${String(t.telegram_user_id).slice(-4)}`,
           adminId: t.admin_id || 'parcelic',
           adminName: t.admin_id ? 'አጫዋች ክፍል' : 'ፓርሴሊክ አጫዋች',
           adminColor: '#f59e0b',
@@ -224,6 +228,7 @@ export const DailyLottoPage: React.FC<DailyLottoPageProps> = ({
         drawTime={drawTime}
         isSuperBonus={false}
         roundId={currentRoundId}
+        serverSeed={serverSeed}
         savedWinners={savedWinners}
         onDrawCompleted={(winners) => setSavedWinners(winners)}
       />

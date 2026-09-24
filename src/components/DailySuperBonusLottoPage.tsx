@@ -21,6 +21,7 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
   const [userTokensCount, setUserTokensCount] = useState<number>(0);
   const [savedWinners, setSavedWinners] = useState<LottoWinnerItem[]>([]);
   const [currentRoundId, setCurrentRoundId] = useState<string | undefined>(undefined);
+  const [serverSeed, setServerSeed] = useState<number | undefined>(undefined);
 
   // Calculate draw time for today 19:00 EAT (16:00 UTC)
   const drawTime = React.useMemo(() => {
@@ -36,9 +37,29 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
 
   useEffect(() => {
     loadSuperBonusData();
-    // Hourly update sync as requested
-    const hourlyInterval = setInterval(loadSuperBonusData, 3600000);
-    return () => clearInterval(hourlyInterval);
+
+    // Realtime subscription for super bonus tokens and rounds
+    const superBonusChannel = supabase
+      .channel('realtime-super-bonus-lotto')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'daily_lotto_super_bonus_tokens' },
+        () => {
+          loadSuperBonusData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'daily_lotto_super_bonus_rounds' },
+        () => {
+          loadSuperBonusData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(superBonusChannel);
+    };
   }, [telegramUserId]);
 
   const loadSuperBonusData = async () => {
@@ -48,16 +69,19 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
       setTotalPot(Number(potData));
     }
 
-    // 2. Fetch current open Super Bonus round
+    // 2. Fetch current open or drawing Super Bonus round
     const { data: round } = await supabase
       .from('daily_lotto_super_bonus_rounds')
       .select('*')
-      .eq('status', 'open')
+      .in('status', ['open', 'drawing'])
       .order('created_at', { ascending: false })
       .maybeSingle();
 
     if (round) {
       setCurrentRoundId(round.id);
+      if (round.cosmic_distance_seed) {
+        setServerSeed(Number(round.cosmic_distance_seed));
+      }
       // 3. Fetch tokens
       const { data: tokenRows } = await supabase
         .from('daily_lotto_super_bonus_tokens')
@@ -70,7 +94,7 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
           id: t.id,
           tokenNumber: t.token_number || idx + 1,
           telegramUserId: t.telegram_user_id,
-          userName: `Winner #${String(t.telegram_user_id).slice(-4)}`,
+          userName: `ተጫዋች #${String(t.telegram_user_id).slice(-4)}`,
           adminId: t.admin_id || 'parcelic',
           adminName: t.admin_id ? 'አጫዋች ክፍል' : 'ፓርሴሊክ አጫዋች',
           adminColor: '#8b5cf6',
@@ -159,6 +183,7 @@ export const DailySuperBonusLottoPage: React.FC<DailySuperBonusLottoPageProps> =
         drawTime={drawTime}
         isSuperBonus={true}
         roundId={currentRoundId}
+        serverSeed={serverSeed}
         savedWinners={savedWinners}
         onDrawCompleted={(winners) => setSavedWinners(winners)}
       />

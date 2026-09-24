@@ -69,6 +69,7 @@ interface MegaCircleLottoProps {
   drawTime: Date; // e.g. 18:00 (ማታ 12 ሰአት) or 19:00 (ማታ 1 ሰአት) EAT
   isSuperBonus?: boolean;
   roundId?: string;
+  serverSeed?: number; // Single authoritative 9-digit distance constant from server
   onDrawCompleted?: (winners: LottoWinnerItem[]) => void;
   savedWinners?: LottoWinnerItem[];
   isDemoModeAllowed?: boolean;
@@ -110,6 +111,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
   drawTime,
   isSuperBonus = false,
   roundId,
+  serverSeed,
   onDrawCompleted,
   savedWinners = [],
   isDemoModeAllowed = true,
@@ -205,10 +207,27 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     return getActiveDistanceSlice(distanceInfo, activeTokens.length);
   }, [distanceInfo, activeTokens.length]);
 
+  // If server has already locked a cosmic seed for this round, adopt it immediately!
+  useEffect(() => {
+    if (serverSeed && serverSeed > 0) {
+      serverFrozenSeedRef.current = serverSeed;
+      setDistanceInfo(buildDistanceInfoFromMeters(serverSeed, 'scheduled-freeze'));
+    }
+  }, [serverSeed]);
+
+  // Is seed locked: true if server committed seed, or drawing started, or draw time reached, or winners exist
+  const isSeedLocked = !!(
+    serverSeed ||
+    serverFrozenSeedRef.current ||
+    isDrawing ||
+    timeUntilDrawSec === 0 ||
+    winners.length > 0
+  );
+
   // Real-time Local Earth-Moon Distance Projection + Scheduled Server Discrepancy Checks
   // - Changes LIVE smoothly on UI every second with ZERO DB reads and ZERO network spam
   // - Discrepancy checks at designated checkpoints (hourly, 5min in last hr, 5s in last min)
-  // - Server enforces a SINGLE authoritative seed across all users
+  // - Once locked by server or draw start, the EXACT SAME 9-digit constant is kept until all 10 winners are drawn!
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -217,7 +236,8 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       setTimeUntilDrawSec(sec);
 
       // Local continuous live projection in memory (0 DB / 0 network calls!)
-      if (sec > 0 && !isDrawing && !serverFrozenSeedRef.current) {
+      // ONLY updates live if draw time has not passed and seed is NOT locked!
+      if (sec > 0 && !isDrawing && !serverFrozenSeedRef.current && !serverSeed) {
         setDistanceInfo(getEarthMoonDistanceInfo(now));
       }
 
@@ -233,7 +253,9 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       const nowMs = now.getTime();
       if (
         roundId &&
-        (nowMs - lastSyncCheckRef.current >= checkIntervalMs || (sec === 0 && !serverFrozenSeedRef.current))
+        !serverFrozenSeedRef.current &&
+        !serverSeed &&
+        (nowMs - lastSyncCheckRef.current >= checkIntervalMs || sec === 0)
       ) {
         lastSyncCheckRef.current = nowMs;
         syncServerCosmicSeed({
@@ -254,7 +276,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [drawTime, isDrawing, roundId, isSuperBonus]);
+  }, [drawTime, isDrawing, roundId, isSuperBonus, serverSeed]);
 
   // Sound Synthesizer (Ticks & Fanfare)
   const playTickSound = (freq = 900) => {
@@ -412,24 +434,27 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       } catch {
         // Local fallback
       }
+    } else if (isDemo) {
+      // In demo mode, freeze the current distance so it stays constant throughout the demo
+      serverFrozenSeedRef.current = distanceInfo.distanceMeters;
     }
 
     const slice = getActiveDistanceSlice(currentSeedInfo, pool.length);
     const stepsCount = slice.sliceValue;
 
     setStatusMessage(
-      `🌌 የጨረቃ ርቀት ቁጥር: ${slice.highlightedSuffix} ሜትር (${slice.activeDigitCount} ዲጂቶች) • 3D የካሲኖ እጣ ማውጣት ተጀምሯል!`
+      `🌌 ቋሚ የጨረቃ ርቀት ቁጥር: ${slice.highlightedSuffix} ሜትር (${slice.activeDigitCount} ዲጂቶች) • የእጣ ማውጣት ሂደት ተጀምሯል!`
     );
 
     await spinPointerToWinner(1, stepsCount, isDemo, pool);
   };
 
   // Spin Pointer Physics driven token-by-token by Earth-Moon distance seed
-  // ALL LEVEL WINNERS follow the EXACT SAME drawing steps!
-  // - Drawing duration per winner: max 3 minutes (180s)
-  // - Minimum speed: 1 token per second
-  // - The last 2 rounds (revolutions) are slower for users to inspect the movement
-  // - The last 2 rounds never exceed 1 minute (60s)
+  // ALL 10 WINNERS (እድለኞች / አሸናፊዎች) follow the EXACT SAME drawing steps!
+  // - Drawing duration per winner: ~20s - 50s (strictly capped under 3 minutes max)
+  // - Early cruise rounds: ~1.5s per revolution (easy and comfortable to watch)
+  // - The last 2 rounds (revolutions) decelerate smoothly for close token-by-token inspection
+  // - The last 2 rounds never exceed 60s (capped at 50s max; 1 token/sec if few tokens)
   // - Live ዙር & እጣ ቁጥር counters update synchronously
   const spinPointerToWinner = async (
     targetRank: number,
@@ -449,8 +474,8 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       const chosenToken = pool[winnerIdx];
 
       // Exact uniform structure for ALL 10 ranks:
-      // Early fast rounds + 2 last slower inspection rounds = Total rounds
-      const earlyRounds = isDemo ? 2 : 4;
+      // 3 Early cruise rounds + 2 last slower inspection rounds = 5 total rounds
+      const earlyRounds = isDemo ? 2 : 3;
       const lastRounds = 2; // Exactly 2 full rounds for final token-by-token inspection
       const totalRounds = earlyRounds + lastRounds;
 
@@ -462,23 +487,20 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       const last2AngleDelta = lastRounds * 360 + landingOffsetAngle;
       const totalAngleDelta = earlyAngleDelta + last2AngleDelta;
 
-      // DURATION & SPEED LIMITS:
+      // CALIBRATED DURATION & SPEED LIMITS:
       // 1. Last 2 rounds:
-      //    - If tokens are few (<= 30): at 1 token/sec, 2 * N <= 60 seconds (never exceeds 1 min).
-      //    - If tokens are many (> 30): capped at maximum 60,000 ms (1 minute).
-      // 2. Entire winner drawing:
-      //    - Must NOT exceed 3 minutes (180 seconds).
-      //    - Minimum speed is 1 token per second.
+      //    - If tokens are few (<= 25): paced at 1 token/sec (takes 2 * N * 1s <= 50s, never exceeds 1 min).
+      //    - If tokens are many (> 25): paced at ~350ms per token, clamped to max 50 seconds (<= 60s).
+      // 2. Early cruise rounds:
+      //    - Fast enough to build anticipation, slow enough to clearly observe sectors (~1.5s per revolution).
+      // 3. Entire winner drawing:
+      //    - Strictly finishes in ~20-55s (well below 3 minutes max).
       const tokensInLast2Rounds = N * 2;
       const last2RoundsDurationMs = isDemo
-        ? Math.min(8000, Math.max(3000, tokensInLast2Rounds * 80))
-        : Math.min(60000, tokensInLast2Rounds * 1000); // 1 token/sec when N <= 30; capped at 60s when N > 30!
+        ? 8000
+        : Math.min(50000, Math.max(14000, tokensInLast2Rounds * (N <= 25 ? 1000 : 350)));
 
-      // Early rounds duration (clamped so total duration <= 180 seconds / 3 minutes):
-      const earlyDurationMs = isDemo
-        ? 3500
-        : Math.min(120000, Math.max(8000, earlyRounds * N * 100));
-
+      const earlyDurationMs = isDemo ? 2500 : 4500;
       const totalDurationMs = earlyDurationMs + last2RoundsDurationMs;
 
       const startTime = performance.now();
@@ -496,23 +518,22 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         let roundsRemaining = totalRounds;
 
         if (elapsed < earlyDurationMs) {
-          // PHASE 1: Early Fast Rounds
+          // PHASE 1: Early Cruise Rounds (Smooth progressive rotation)
           const p1 = elapsed / earlyDurationMs;
-          // Smooth progressive cubic hermite curve
-          const ease1 = p1 * p1 * (3 - 2 * p1);
+          const ease1 = Math.sin((p1 * Math.PI) / 2);
           currentAngle = startAngle + earlyAngleDelta * ease1;
 
           const angleTraversed = currentAngle - startAngle;
           roundsRemaining = Math.max(2, Math.ceil((totalAngleDelta - angleTraversed) / 360));
           setIsInFinalInspection(false);
         } else {
-          // PHASE 2: The Last 2 Rounds (Slower for users to inspect the movement)
+          // PHASE 2: The Last 2 Rounds (Slower with authentic mechanical inertia)
           isLast2Phase = true;
           setIsInFinalInspection(true);
           const elapsed2 = Math.min(last2RoundsDurationMs, elapsed - earlyDurationMs);
           const p2 = elapsed2 / last2RoundsDurationMs;
-          // Decelerating cubic curve for close inspection
-          const ease2 = 1 - Math.pow(1 - p2, 2.6);
+          // Decelerating power curve: slows down dramatically near the end
+          const ease2 = 1 - Math.pow(1 - p2, 2.8);
           currentAngle = startAngle + earlyAngleDelta + last2AngleDelta * ease2;
 
           const angleTraversed = currentAngle - startAngle;
@@ -607,7 +628,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     setActiveTokens(remainingTokens);
 
     setStatusMessage(
-      `🎉 አሸናፊ ደረጃ #${rank}! ${winningToken.userName} ${prizeWon.toLocaleString()} ETB አሸንፈዋል (አጫዋች: ${winningToken.adminName})${quotaRetiredNotice}`
+      `🎉 #${rank}ኛ እድለኛ / አሸናፊ! ${winningToken.userName} ${prizeWon.toLocaleString()} ETB አሸንፈዋል (አጫዋች: ${winningToken.adminName})${quotaRetiredNotice}`
     );
 
     // Fallback: If no more tokens remain before rank 10, redistribute remainder proportionally to drawn winners
@@ -623,7 +644,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         setIsDrawing(false);
         setIsDemoRunning(false);
         setStatusMessage(
-          `🏆 ሁሉም እጣዎች ተጠናቀዋል! የቀረው ካዝና (${undistributedPot.toLocaleString()} ETB) ለአሸናፊዎች ተከፋፍሏል!`
+          `🏆 ሁሉም እጣዎች ተጠናቀዋል! የቀረው ካዝና (${undistributedPot.toLocaleString()} ETB) ለእድለኞች / አሸናፊዎች ተከፋፍሏል!`
         );
         if (onDrawCompleted) onDrawCompleted(redistributed);
         return;
@@ -657,7 +678,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
           // All 10 winners drawn!
           setIsDrawing(false);
           setIsDemoRunning(false);
-          setStatusMessage('🏆 ሁሉም 10 አሸናፊዎች ወጥተዋል! ይፋዊው ውጤት በቦርዱ ላይ ይቆያል።');
+          setStatusMessage('🏆 ሁሉም 10 እድለኞች / አሸናፊዎች ወጥተዋል! ይፋዊው ውጤት በቦርዱ ላይ ይቆያል።');
           if (onDrawCompleted) {
             onDrawCompleted(updatedWinners);
           }
@@ -714,16 +735,18 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
           <div className="flex justify-between items-center text-xs">
             <div className="flex items-center gap-1.5 text-amber-400 font-bold">
               <Moon className="w-4 h-4 text-cyan-400" />
-              <span>የዛሬው የጨረቃና የምድር ርቀት (9 ዲጂት):</span>
+              <span>የእጣ ማውጫ የጨረቃና የምድር ርቀት (9 ዲጂት):</span>
             </div>
-            <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
-              {timeUntilDrawSec > 0 ? (
+            <span className="text-[10px] font-mono flex items-center gap-1">
+              {isSeedLocked ? (
+                <span className="text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-500/40 font-bold flex items-center gap-1">
+                  <span>🔒 ቋሚ የእጣ ማውጫ ርቀት</span>
+                </span>
+              ) : (
                 <>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
-                  <span className="text-emerald-400 font-semibold">የቀጥታ ቆጣሪ (Live)</span>
+                  <span className="text-emerald-400 font-semibold">🟢 የቀጥታ ቆጣሪ (Live)</span>
                 </>
-              ) : (
-                <span className="text-amber-400">🔒 በይፋዊ እጣ ሰዓት ቆሟል</span>
               )}
             </span>
           </div>
@@ -739,6 +762,12 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
             <div className="text-[11px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
               {activeDistanceSlice.activeDigitCount} ዲጂት ({activeTokens.length} እጣዎች)
             </div>
+          </div>
+
+          <div className="mt-1.5 text-[10px] text-slate-400 leading-normal border-t border-slate-800/60 pt-1.5">
+            {isSeedLocked
+              ? '🔒 ይህ ይፋዊ የ 9 ዲጂት የርቀት ቁጥር 10ሩም እድለኞች / አሸናፊዎች እስኪወጡ ድረስ ለሁሉም ተመልካቾች ቋሚ ሆኖ ይቆያል።'
+              : 'ℹ️ እጣ ማውጣት ሲጀመር ይህ ቁጥር በቋሚነት ተቆልፎ ለ 10ሩም እድለኞች / አሸናፊዎች ያገለግላል።'}
           </div>
         </div>
 
@@ -759,25 +788,25 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
 
           <div className="bg-slate-950/80 border border-emerald-500/30 rounded-2xl p-2.5">
             <div className="text-[10px] uppercase font-bold text-emerald-400 flex items-center gap-1">
-              <SafeDepositBoxIcon className="w-3.5 h-3.5" />
-              <span>የትላንት ካዝና</span>
+              <Trophy className="w-3 h-3" />
+              <span>እድለኞች / አሸናፊዎች</span>
             </div>
-            <div className="text-base sm:text-lg font-black text-emerald-400 font-mono mt-0.5">
-              {(yesterdayPot || Math.round(totalPot * 0.85)).toLocaleString()} ETB
+            <div className="text-base sm:text-lg font-black text-white font-mono mt-0.5">
+              {winners.length}/10
             </div>
-            <div className="text-[9px] text-slate-400">የተከፈለ</div>
+            <div className="text-[9px] text-slate-400">የተገኙ</div>
           </div>
 
           <div className="bg-slate-950/80 border border-blue-500/30 rounded-2xl p-2.5">
             <div className="text-[10px] uppercase font-bold text-blue-400 flex items-center gap-1">
               <Clock className="w-3 h-3" />
-              <span>ቀጣይ እጣ</span>
+              <span>እጣ ማውጣት ሰዓት</span>
             </div>
             <div className="text-base sm:text-lg font-black text-white font-mono mt-0.5">
               {formatCountdown(timeUntilDrawSec)}
             </div>
             <div className="text-[9px] text-slate-400">
-              {activeTokens.length} እጣዎች በካዝና
+              {activeTokens.length} እጣዎች በክቡ ላይ
             </div>
           </div>
         </div>
@@ -1099,7 +1128,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                 🏆
               </div>
               <div className="mt-2 text-xs uppercase font-extrabold text-amber-400 tracking-wider">
-                አሸናፊ ደረጃ #{celebratingWinner.rank}
+                #{celebratingWinner.rank}ኛ እድለኛ / አሸናፊ
               </div>
               <div className="text-xl font-black text-white mt-1">
                 {celebratingWinner.userName}
@@ -1111,7 +1140,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                 እጣ #{celebratingWinner.tokenNumber} • አጫዋች: {celebratingWinner.adminName}
               </div>
               <div className="mt-4 px-3 py-1 bg-slate-800 rounded-full text-xs text-amber-300 font-mono font-bold">
-                ቀጣይ እጣ በ {celebrationCountdown} ሰከንድ ውስጥ...
+                ቀጣይ እጣ ማውጣት በ {celebrationCountdown} ሰከንድ ውስጥ...
               </div>
             </div>
           )}
@@ -1170,7 +1199,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                 <span>1. የጨረቃና የምድር ርቀት (Earth-Moon Distance Cosmic Seed)</span>
               </h4>
               <p className="text-[11px] text-slate-400">
-                የእጣው አሸናፊ የሚወሰነው በየሰከንዱ በሚለዋወጠው ይፋዊ የጨረቃና የምድር 9-ዲጂት የርቀት ቁጥር (ሜትር) ነው። በእጣው ላይ ባሉት እጣዎች ብዛት መሰረት የመጨረሻዎቹ ዲጂቶች ተመርጠው ቆጣሪውን ያሽከረክራሉ።
+                የእጣው እድለኛ / አሸናፊ የሚወሰነው በይፋዊው የጨረቃና የምድር 9-ዲጂት የርቀት ቁጥር (ሜትር) ነው። እጣ ማውጣት ሲጀመር ይህ ቁጥር ለሁሉም ተመልካቾች በቋሚነት ተቆልፎ ይቆያል፤ በክቡ ላይ ባሉት እጣዎች ብዛት መሰረት የመጨረሻዎቹ ዲጂቶች ተመርጠው ለእያንዳንዱ ደረጃ እድለኛ / አሸናፊ ማውጫነት ያገለግላሉ።
               </p>
             </div>
 
@@ -1179,16 +1208,16 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                 <span>2. የአጫዋች ፍትሃዊ ድርሻ ህግ (Fair Share Quota / Cup Rule)</span>
               </h4>
               <p className="text-[11px] text-slate-400">
-                እያንዳንዱ አጫዋች ባስመዘገበው የእጣ ብዛት መሰረት የካዝናው ድርሻ ኮታ ይሰጠዋል። አንድ አጫዋች ያገኘው የሽልማት ድርሻ ከተፈቀደለት ኮታ እኩል ወይም የበለጠ ሲሆን፣ የቀሩት እጣዎቹ ከዛሬው እጣ በቋሚነት ይሰናበታሉ። ይህም ሌሎች አጫዋቾች የማሸነፍ እድል እንዲያገኙ ያረጋግጣል።
+                እያንዳንዱ አጫዋች ባስመዘገበው የእጣዎች ብዛት መሰረት የካዝናው ድርሻ ኮታ ይሰጠዋል። አንድ አጫዋች ያገኘው የሽልማት ድርሻ ከተፈቀደለት ኮታ እኩል ወይም የበለጠ ሲሆን (ጽዋው ሲሞላ)፣ የቀሩት እጣዎቹ ከዛሬው እጣ በቋሚነት ይሰናበታሉ። ይህም ሌሎች አጫዋቾች የማሸነፍ እድል እንዲያገኙ ያረጋግጣል።
               </p>
             </div>
 
             <div className="space-y-1">
               <h4 className="font-black text-cyan-400 flex items-center gap-1.5">
-                <span>3. የ 10 አሸናፊዎች ድርሻ (Halving Prize Allocation)</span>
+                <span>3. የ 10 እድለኞች / አሸናፊዎች ድርሻ (Halving Prize Allocation)</span>
               </h4>
               <p className="text-[11px] text-slate-400">
-                ደረጃ 1: 50% የካዝናው ድርሻ • ደረጃ 2: 25% • ደረጃ 3: 12.5% • ደረጃ 4: 6.25% ... እያለ እስከ 10ኛው ደረጃ ይቀጥላል።
+                ደረጃ 1 (1ኛ እድለኛ / አሸናፊ): 50% የካዝናው ድርሻ • ደረጃ 2: 25% • ደረጃ 3: 12.5% • ደረጃ 4: 6.25% ... እያለ እስከ 10ኛው ደረጃ ይቀጥላል።
               </p>
             </div>
           </div>
@@ -1201,11 +1230,11 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
           <div className="flex items-center gap-2">
             <Trophy className="w-4 h-4 text-amber-400" />
             <h3 className="text-sm font-black text-white uppercase tracking-wide">
-              የ 10 አሸናፊዎች ይፋዊ ሰሌዳ
+              የ 10 እድለኞች / አሸናፊዎች ይፋዊ ሰሌዳ
             </h3>
           </div>
           <span className="text-[11px] text-slate-500 font-mono">
-            {winners.length} / 10 የወጡ
+            {winners.length} / 10 የተገኙ
           </span>
         </div>
 
@@ -1249,7 +1278,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                       </div>
                     ) : (
                       <div className="italic text-slate-500 text-xs">
-                        {isCurrentlyDrawing ? '⚡ ቆጣሪው ወደ ዜሮ እየቀነሰ አሸናፊውን እየፈለገ ነው...' : 'የሚወጣ...'}
+                        {isCurrentlyDrawing ? '⚡ ቆጣሪው ወደ ዜሮ እየቀነሰ እድለኛውን / አሸናፊውን እየፈለገ ነው...' : 'የሚወጣ...'}
                       </div>
                     )}
                   </div>
@@ -1264,7 +1293,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                     {prize.toLocaleString()} ETB
                   </div>
                   <div className="text-[9px] text-slate-500">
-                    {rank === 1 ? '50% የካዝና ድርሻ' : `የ#${rank - 1} ግማሽ`}
+                    {rank === 1 ? '1ኛ እድለኛ / አሸናፊ (50% ካዝና)' : `የ#${rank - 1} ግማሽ ድርሻ`}
                   </div>
                 </div>
               </div>
