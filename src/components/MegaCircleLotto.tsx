@@ -15,6 +15,7 @@ import {
   Moon,
   Compass,
   CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
 import {
@@ -48,6 +49,24 @@ export interface LottoWinnerItem {
   tokenNumber: number;
 }
 
+export interface AdminStageRecord {
+  rank: number;
+  percentage: number;
+  prizeAmount: number;
+  winnerName: string;
+}
+
+export interface RetiredAdminCeremonyData {
+  adminId: string;
+  adminName: string;
+  adminColor: string;
+  initialQuota: number;
+  totalPercentage: number;
+  stagesBreakdown: string;
+  totalWonEtb: number;
+  tokensRemoved: number;
+}
+
 export const SafeDepositBoxIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" fillOpacity="0.15" />
@@ -61,15 +80,257 @@ export const SafeDepositBoxIcon: React.FC<{ className?: string }> = ({ className
   </svg>
 );
 
+// Animated Earth-Moon Orbit Simulation Diagram (Zero extra bundle weight, native SVG)
+const EarthMoonOrbitDiagram: React.FC<{ distanceMeters: number }> = ({ distanceMeters }) => {
+  return (
+    <div className="bg-slate-950/95 border border-cyan-500/30 rounded-2xl p-3 my-2 text-center relative overflow-hidden shadow-inner">
+      <div className="text-[11px] font-bold text-cyan-300 flex items-center justify-center gap-1.5 mb-1.5">
+        <Moon className="w-3.5 h-3.5 text-cyan-400" />
+        <span>የጨረቃና የምድር የምህዋር ርቀት መለዋወጥ (Earth-Moon Orbit Seed)</span>
+      </div>
+
+      <svg viewBox="0 0 340 145" className="w-full h-36 select-none">
+        <defs>
+          <radialGradient id="earthGrad" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#67e8f9" />
+            <stop offset="35%" stopColor="#0284c7" />
+            <stop offset="75%" stopColor="#0369a1" />
+            <stop offset="100%" stopColor="#082f49" />
+          </radialGradient>
+          <radialGradient id="moonGrad" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="45%" stopColor="#cbd5e1" />
+            <stop offset="100%" stopColor="#475569" />
+          </radialGradient>
+          <radialGradient id="laserBeamGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="#0284c7" stopOpacity="0" />
+          </radialGradient>
+          <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+
+        {/* Orbit ellipse path */}
+        <ellipse
+          cx="170"
+          cy="70"
+          rx="135"
+          ry="48"
+          fill="none"
+          stroke="#1e293b"
+          strokeWidth="2"
+        />
+        <ellipse
+          cx="170"
+          cy="70"
+          rx="135"
+          ry="48"
+          fill="none"
+          stroke="#0284c7"
+          strokeWidth="1.2"
+          strokeDasharray="4 6"
+          opacity="0.7"
+        />
+
+        {/* Perigee & Apogee marker points */}
+        <text x="38" y="20" fill="#64748b" fontSize="8px" fontWeight="bold">
+          ፔሪጂ (ዝቅተኛ): ~362,600 ኪ.ሜ
+        </text>
+        <text x="180" y="20" fill="#64748b" fontSize="8px" fontWeight="bold">
+          አፖጂ (ከፍተኛ): ~405,400 ኪ.ሜ
+        </text>
+
+        {/* Center Earth */}
+        <g transform="translate(155, 70)">
+          {/* Atmosphere ring */}
+          <circle r="22" fill="#0284c7" opacity="0.2" filter="url(#softGlow)" />
+          <circle r="16" fill="url(#earthGrad)" stroke="#38bdf8" strokeWidth="1.5" />
+          <circle r="12" fill="none" stroke="#bae6fd" strokeWidth="0.8" strokeDasharray="2 3" opacity="0.6" />
+          <text textAnchor="middle" dy=".3em" fill="#ffffff" fontSize="7px" fontWeight="bold">
+            ምድር
+          </text>
+        </g>
+
+        {/* Animated Moon revolving via native SVG animateMotion (Hardware accelerated) */}
+        <g>
+          <animateMotion
+            path="M 35 70 A 135 48 0 1 0 305 70 A 135 48 0 1 0 35 70"
+            dur="22s"
+            repeatCount="indefinite"
+          />
+          <circle r="8" fill="url(#moonGrad)" stroke="#f8fafc" strokeWidth="1" filter="url(#softGlow)" />
+          <text textAnchor="middle" dy="16" fill="#f8fafc" fontSize="7px" fontWeight="bold">
+            ጨረቃ
+          </text>
+        </g>
+
+        {/* Real-time Distance readout pill */}
+        <g transform="translate(170, 132)">
+          <rect x="-105" y="-11" width="210" height="20" rx="10" fill="#020617" stroke="#38bdf8" strokeWidth="1.2" />
+          <circle cx="-90" cy="-1" r="3" fill="#10b981" />
+          <text textAnchor="middle" y="2.5" fill="#38bdf8" fontSize="9.5px" fontFamily="monospace" fontWeight="bold">
+            📡 የቀጥታ ርቀት: {distanceMeters.toLocaleString()} ሜትር
+          </text>
+        </g>
+      </svg>
+
+      <p className="text-[10px] text-slate-400 mt-1 leading-normal">
+        ጨረቃ በምህዋሯ ስትሽከረከር የምድርና የጨረቃ ርቀት በየሰከንዱ ይለዋወጣል። ይህ የማይቀየር ተፈጥሯዊ ቁጥር ማንም ሰው ሊቆጣጠረው የማይችል 100% ግልጽና ፍትሃዊ እጣ ያወጣል።
+      </p>
+    </div>
+  );
+};
+
+// 3D Glass Chalice / Beaker SVG Graphic for Admin Cup
+const AdminCupGraphic: React.FC<{
+  adminName: string;
+  adminColor: string;
+  quota: number;
+  accum: number;
+  isFull: boolean;
+  stages: AdminStageRecord[];
+}> = ({ adminName, adminColor, quota, accum, isFull, stages }) => {
+  const fillRatio = Math.min(100, Math.round((accum / Math.max(1, quota)) * 100));
+  
+  // Format arithmetic equation: e.g. "50% (#1) + 25% (#2) = 75%"
+  const equationText = stages.length > 0
+    ? `${stages.map((s) => `${s.percentage}% (#${s.rank})`).join(' + ')} = ${accum}%`
+    : `${accum}% / ${quota}%`;
+
+  return (
+    <div
+      className={`p-3 rounded-2xl border transition-all text-xs flex items-center gap-3 relative overflow-hidden ${
+        isFull
+          ? 'bg-emerald-950/40 border-emerald-500/50 shadow-lg shadow-emerald-950/30'
+          : 'bg-slate-950/90 border-slate-800'
+      }`}
+    >
+      {/* 3D Glass Chalice / Beaker */}
+      <div className="relative w-12 h-16 flex-shrink-0 flex items-center justify-center">
+        <svg viewBox="0 0 50 68" className="w-full h-full select-none">
+          <defs>
+            <linearGradient id={`liquidGrad-${adminName}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={isFull ? '#34d399' : adminColor} stopOpacity="0.9" />
+              <stop offset="100%" stopColor={isFull ? '#059669' : adminColor} stopOpacity="0.7" />
+            </linearGradient>
+            <linearGradient id="glassBorder" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.7" />
+              <stop offset="50%" stopColor="#f8fafc" stopOpacity="0.9" />
+              <stop offset="100%" stopColor="#64748b" stopOpacity="0.7" />
+            </linearGradient>
+          </defs>
+
+          {/* Glass Beaker Body */}
+          <path
+            d="M 10 8 L 14 52 A 8 8 0 0 0 22 60 L 28 60 A 8 8 0 0 0 36 52 L 40 8 Z"
+            fill="#090d16"
+            stroke="url(#glassBorder)"
+            strokeWidth="1.8"
+          />
+
+          {/* Liquid Fill Level */}
+          <clipPath id={`cupClip-${adminName}`}>
+            <path d="M 11 9 L 14 52 A 8 8 0 0 0 22 59 L 28 59 A 8 8 0 0 0 36 52 L 39 9 Z" />
+          </clipPath>
+
+          <g clipPath={`url(#cupClip-${adminName})`}>
+            {/* Liquid rectangle height driven by fillRatio (max height 50) */}
+            <rect
+              x="8"
+              y={59 - (fillRatio / 100) * 50}
+              width="34"
+              height="55"
+              fill={`url(#liquidGrad-${adminName})`}
+              className="transition-all duration-700 ease-out"
+            />
+            {/* Liquid surface wave highlight */}
+            <ellipse
+              cx="25"
+              cy={59 - (fillRatio / 100) * 50}
+              rx="13"
+              ry="2"
+              fill="#ffffff"
+              opacity="0.4"
+            />
+          </g>
+
+          {/* Glass Beaker Measurement Ticks */}
+          <line x1="12" y1="21" x2="16" y2="21" stroke="#94a3b8" strokeWidth="1" opacity="0.6" />
+          <line x1="13" y1="34" x2="18" y2="34" stroke="#94a3b8" strokeWidth="1.2" opacity="0.8" />
+          <line x1="14" y1="46" x2="18" y2="46" stroke="#94a3b8" strokeWidth="1" opacity="0.6" />
+
+          {/* Glass Top Lip */}
+          <ellipse cx="25" cy="8" rx="15" ry="3" fill="none" stroke="url(#glassBorder)" strokeWidth="1.8" />
+
+          {/* Full Trophy Stamp Icon */}
+          {isFull && (
+            <text x="25" y="38" textAnchor="middle" fontSize="16px">
+              🏆
+            </text>
+          )}
+        </svg>
+      </div>
+
+      {/* Admin Quota Information & Arithmetic Details */}
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-1.5 truncate">
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: adminColor }} />
+            <span className="font-black text-white truncate text-xs">{adminName}</span>
+          </div>
+          <span className="font-mono text-[10px] font-bold flex-shrink-0 ml-1">
+            {isFull ? (
+              <span className="text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 inline" />
+                <span>ጽዋው ሞልቷል!</span>
+              </span>
+            ) : (
+              <span className="text-slate-300">
+                ኮታ፡ <b className="text-amber-400">{quota}%</b>
+              </span>
+            )}
+          </span>
+        </div>
+
+        {/* Detailed Mathematical Calculation String */}
+        <div className="text-[10px] font-mono text-slate-300 truncate">
+          {stages.length > 0 ? (
+            <span className={isFull ? 'text-emerald-300 font-bold' : 'text-amber-300 font-semibold'}>
+              {equationText}
+            </span>
+          ) : (
+            <span className="text-slate-500 italic">እስካሁን ምንም እጣ አላሸነፈም (0%)</span>
+          )}
+        </div>
+
+        {/* Progress Bar with Percentage Tag */}
+        <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800 relative">
+          <div
+            style={{ width: `${fillRatio}%`, backgroundColor: isFull ? '#10b981' : adminColor }}
+            className="h-full rounded-full transition-all duration-700 ease-out"
+          />
+        </div>
+
+        <div className="flex justify-between items-center text-[9px] text-slate-400">
+          <span>{fillRatio}% ተሞልቷል</span>
+          <span>{isFull ? '⚠️ የቀሩት እጣዎች ተሰናብተዋል' : `የቀረ ኮታ: ${Math.max(0, quota - accum)}%`}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface MegaCircleLottoProps {
   title: string;
   tokens: LottoTokenItem[];
   totalPot: number;
   yesterdayPot?: number;
-  drawTime: Date; // e.g. 18:00 (ማታ 12 ሰአት) or 19:00 (ማታ 1 ሰአት) EAT
+  drawTime: Date;
   isSuperBonus?: boolean;
   roundId?: string;
-  serverSeed?: number; // Single authoritative 9-digit distance constant from server
+  serverSeed?: number;
   onDrawCompleted?: (winners: LottoWinnerItem[]) => void;
   savedWinners?: LottoWinnerItem[];
   isDemoModeAllowed?: boolean;
@@ -124,6 +385,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
   const [isInFinalInspection, setIsInFinalInspection] = useState<boolean>(false);
   const [currentDrawingRank, setCurrentDrawingRank] = useState<number>(1);
   const [celebratingWinner, setCelebratingWinner] = useState<LottoWinnerItem | null>(null);
+  const [retiredAdminCeremony, setRetiredAdminCeremony] = useState<RetiredAdminCeremonyData | null>(null);
   const [celebrationCountdown, setCelebrationCountdown] = useState<number>(0);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
@@ -137,13 +399,15 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
   const [revolutionCount, setRevolutionCount] = useState<number>(0); // ዙር
   const [countdownStep, setCountdownStep] = useState<number>(0); // እጣ ቁጥር
 
-  // Fair Share Quota tracking ("የአጫዋች ድርሻ / Cup is Full" state)
+  // Fair Share Quota tracking ("የአጫዋች ድርሻ / ጽዋው ሞልቷል" state)
   const [adminAccumulatedShare, setAdminAccumulatedShare] = useState<{ [adminId: string]: number }>({});
+  const [adminStagesWon, setAdminStagesWon] = useState<{ [adminId: string]: AdminStageRecord[] }>({});
   const [retiredAdmins, setRetiredAdmins] = useState<string[]>([]);
   const [initialAdminQuotas, setInitialAdminQuotas] = useState<{ [adminId: string]: number }>({});
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const celebrationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isCancelledRef = useRef<boolean>(false);
   const serverFrozenSeedRef = useRef<number | null>(null);
   const lastSyncCheckRef = useRef<number>(0);
@@ -188,20 +452,6 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     return map;
   }, [activeTokens]);
 
-  // Live Token Weight Percentages for participating አጫዋቾች
-  const adminProbabilities = useMemo(() => {
-    const counts: { [adminId: string]: number } = {};
-    activeTokens.forEach((t) => {
-      counts[t.adminId] = (counts[t.adminId] || 0) + 1;
-    });
-    const total = activeTokens.length || 1;
-    const probs: { [adminId: string]: number } = {};
-    Object.keys(counts).forEach((aid) => {
-      probs[aid] = (counts[aid] / total) * 100;
-    });
-    return probs;
-  }, [activeTokens]);
-
   // Active distance slice based on current active tokens count
   const activeDistanceSlice: ActiveDistanceSlice = useMemo(() => {
     return getActiveDistanceSlice(distanceInfo, activeTokens.length);
@@ -225,9 +475,6 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
   );
 
   // Real-time Local Earth-Moon Distance Projection + Scheduled Server Discrepancy Checks
-  // - Changes LIVE smoothly on UI every second with ZERO DB reads and ZERO network spam
-  // - Discrepancy checks at designated checkpoints (hourly, 5min in last hr, 5s in last min)
-  // - Once locked by server or draw start, the EXACT SAME 9-digit constant is kept until all 10 winners are drawn!
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -236,13 +483,11 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       setTimeUntilDrawSec(sec);
 
       // Local continuous live projection in memory (0 DB / 0 network calls!)
-      // ONLY updates live if draw time has not passed and seed is NOT locked!
       if (sec > 0 && !isDrawing && !serverFrozenSeedRef.current && !serverSeed) {
         setDistanceInfo(getEarthMoonDistanceInfo(now));
       }
 
-      // Checkpoint Discrepancy Schedule:
-      // Hourly if > 1 hour, every 5 min if in last hour, every 5s if in last minute
+      // Checkpoint Discrepancy Schedule
       let checkIntervalMs = 3600000;
       if (sec <= 60 && sec > 0) {
         checkIntervalMs = 5000;
@@ -278,8 +523,25 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     return () => clearInterval(timer);
   }, [drawTime, isDrawing, roundId, isSuperBonus, serverSeed]);
 
-  // Sound Synthesizer (Ticks & Fanfare)
-  const playTickSound = (freq = 900) => {
+  // Web Speech API Voice Announcement with safe fallback
+  const announceWithVoice = (text: string) => {
+    if (!soundEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.88;
+      utterance.pitch = 1.0;
+      const voices = window.speechSynthesis.getVoices();
+      const amVoice = voices.find((v) => v.lang.startsWith('am') || v.lang.startsWith('en'));
+      if (amVoice) utterance.voice = amVoice;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // Audio fallback
+    }
+  };
+
+  // Sound Synthesizers: Crisp Ratchet Ticks, Suspense Heartbeat & Grand Fanfare
+  const playTickSound = (freq = 880) => {
     if (!soundEnabled) return;
     try {
       if (!audioCtxRef.current) {
@@ -291,15 +553,35 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       const gain = ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      gain.gain.setValueAtTime(0.04, ctx.currentTime);
+      gain.gain.setValueAtTime(0.05, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.04);
-    } catch {
-      // Audio fallback
-    }
+    } catch {}
+  };
+
+  const playHeartbeatSound = () => {
+    if (!soundEnabled) return;
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(65, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(35, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    } catch {}
   };
 
   const playFanfareSound = () => {
@@ -315,16 +597,14 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         const gain = ctx.createGain();
         osc.type = 'sine';
         osc.frequency.setValueAtTime(note, ctx.currentTime + idx * 0.1);
-        gain.gain.setValueAtTime(0.09, ctx.currentTime + idx * 0.1);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.1 + 0.35);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime + idx * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.1 + 0.4);
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(ctx.currentTime + idx * 0.1);
-        osc.stop(ctx.currentTime + idx * 0.1 + 0.35);
+        osc.stop(ctx.currentTime + idx * 0.1 + 0.4);
       });
-    } catch {
-      // Audio fallback
-    }
+    } catch {}
   };
 
   // Generate realistic sample tokens across 6 አጫዋቾች for live demonstration
@@ -373,7 +653,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       setActiveTokens(pool);
     }
 
-    // Reset quotas and prize share for fresh educational sequence
+    // Reset quotas and prize shares for clean demonstration
     const counts: { [aid: string]: number } = {};
     pool.forEach((t) => {
       counts[t.adminId] = (counts[t.adminId] || 0) + 1;
@@ -385,34 +665,66 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     });
     setInitialAdminQuotas(quotas);
     setAdminAccumulatedShare({});
+    setAdminStagesWon({});
     setRetiredAdmins([]);
     setWinners([]);
     setCelebratingWinner(null);
+    setRetiredAdminCeremony(null);
 
     startDrawingFlow(true, pool);
   };
 
-  // Stop Demo & Reset to Normal Clean Window
+  // Stop Demo & Completely Reset to Clean Live State (Always responsive!)
   const handleStopDemo = () => {
     isCancelledRef.current = true;
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    if (celebrationIntervalRef.current) {
+      clearInterval(celebrationIntervalRef.current);
+      celebrationIntervalRef.current = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
     setIsDrawing(false);
     setIsDemoRunning(false);
     setIsInFinalInspection(false);
     setCelebratingWinner(null);
+    setRetiredAdminCeremony(null);
     setWinners(savedWinners);
     setActiveTokens(tokens);
     setCountdownStep(0);
     setRevolutionCount(0);
     setPointerAngle(0);
     setStatusMessage('');
-    triggerHaptic('light');
+
+    // Clear admin cups, stages and retired list completely
+    setAdminAccumulatedShare({});
+    setAdminStagesWon({});
+    setRetiredAdmins([]);
+
+    // Recalculate original quotas from base tokens
+    const counts: { [aid: string]: number } = {};
+    tokens.forEach((t) => {
+      counts[t.adminId] = (counts[t.adminId] || 0) + 1;
+    });
+    const total = tokens.length || 1;
+    const quotas: { [aid: string]: number } = {};
+    Object.keys(counts).forEach((aid) => {
+      quotas[aid] = Math.round((counts[aid] / total) * 100);
+    });
+    setInitialAdminQuotas(quotas);
+
+    if (!serverSeed) {
+      serverFrozenSeedRef.current = null;
+    }
+    triggerHaptic('medium');
   };
 
-  // Main Drawing Sequence Trigger
+  // Main Drawing Flow Sequence
   const startDrawingFlow = async (isDemo = false, poolOverride?: LottoTokenItem[]) => {
     const pool = poolOverride || activeTokens;
     if (isDrawing || pool.length === 0) return;
@@ -420,7 +732,6 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     triggerHaptic('heavy');
 
     let currentSeedInfo = distanceInfo;
-    // For official live draw, ensure single source of truth from server
     if (!isDemo && roundId) {
       try {
         const { seed } = await syncServerCosmicSeed({
@@ -431,11 +742,8 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         serverFrozenSeedRef.current = seed;
         currentSeedInfo = buildDistanceInfoFromMeters(seed, 'scheduled-freeze');
         setDistanceInfo(currentSeedInfo);
-      } catch {
-        // Local fallback
-      }
+      } catch {}
     } else if (isDemo) {
-      // In demo mode, freeze the current distance so it stays constant throughout the demo
       serverFrozenSeedRef.current = distanceInfo.distanceMeters;
     }
 
@@ -449,13 +757,12 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     await spinPointerToWinner(1, stepsCount, isDemo, pool);
   };
 
-  // Spin Pointer Physics driven token-by-token by Earth-Moon distance seed
-  // ALL 10 WINNERS (እድለኞች / አሸናፊዎች) follow the EXACT SAME drawing steps!
-  // - Drawing duration per winner: ~20s - 50s (strictly capped under 3 minutes max)
-  // - Early cruise rounds: ~1.5s per revolution (easy and comfortable to watch)
-  // - The last 2 rounds (revolutions) decelerate smoothly for close token-by-token inspection
-  // - The last 2 rounds never exceed 60s (capped at 50s max; 1 token/sec if few tokens)
-  // - Live ዙር & እጣ ቁጥር counters update synchronously
+  // Spin Pointer Physics:
+  // - Minimum 1 minute (60 seconds) to draw each winner!
+  // - Early cruise rounds (28 seconds, ~9s per revolution)
+  // - Last 2 rounds (32 seconds, token-by-token synchronous inspection)
+  // - Pointer is physically anchored to center axle like a watch hand
+  // - Synchronous countdown: step counter decrements 1-by-1 as pointer advances over each token!
   const spinPointerToWinner = async (
     targetRank: number,
     totalSteps: number,
@@ -469,14 +776,11 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       }
 
       const N = pool.length;
-      // Exact winner landing index based on total distance steps
       const winnerIdx = totalSteps % N;
       const chosenToken = pool[winnerIdx];
 
-      // Exact uniform structure for ALL 10 ranks:
-      // 3 Early cruise rounds + 2 last slower inspection rounds = 5 total rounds
-      const earlyRounds = isDemo ? 2 : 3;
-      const lastRounds = 2; // Exactly 2 full rounds for final token-by-token inspection
+      const earlyRounds = 3; // 3 Smooth cruise revolutions
+      const lastRounds = 2; // Exactly 2 slower token-by-token inspection revolutions
       const totalRounds = earlyRounds + lastRounds;
 
       const targetTokenAngle = (winnerIdx / N) * 360;
@@ -487,24 +791,17 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       const last2AngleDelta = lastRounds * 360 + landingOffsetAngle;
       const totalAngleDelta = earlyAngleDelta + last2AngleDelta;
 
-      // CALIBRATED DURATION & SPEED LIMITS:
-      // 1. Last 2 rounds:
-      //    - If tokens are few (<= 25): paced at 1 token/sec (takes 2 * N * 1s <= 50s, never exceeds 1 min).
-      //    - If tokens are many (> 25): paced at ~350ms per token, clamped to max 50 seconds (<= 60s).
-      // 2. Early cruise rounds:
-      //    - Fast enough to build anticipation, slow enough to clearly observe sectors (~1.5s per revolution).
-      // 3. Entire winner drawing:
-      //    - Strictly finishes in ~20-55s (well below 3 minutes max).
+      // Deliberate, relaxed timing (minimum 60 seconds total!)
+      const earlyDurationMs = 28000; // 28s early cruise
       const tokensInLast2Rounds = N * 2;
-      const last2RoundsDurationMs = isDemo
-        ? 8000
-        : Math.min(50000, Math.max(14000, tokensInLast2Rounds * (N <= 25 ? 1000 : 350)));
+      const last2RoundsDurationMs = Math.max(32000, Math.min(52000, tokensInLast2Rounds * 750));
+      const totalDurationMs = earlyDurationMs + last2RoundsDurationMs; // >= 60,000 ms
 
-      const earlyDurationMs = isDemo ? 2500 : 4500;
-      const totalDurationMs = earlyDurationMs + last2RoundsDurationMs;
+      const tokenAngleWidth = 360 / N;
+      const totalStepsInLast2 = Math.floor(last2AngleDelta / tokenAngleWidth);
 
       const startTime = performance.now();
-      let lastStepTicked = -1;
+      let lastTokensPassed = -1;
 
       const animate = (currentTime: number) => {
         if (isCancelledRef.current) {
@@ -518,7 +815,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         let roundsRemaining = totalRounds;
 
         if (elapsed < earlyDurationMs) {
-          // PHASE 1: Early Cruise Rounds (Smooth progressive rotation)
+          // Phase 1: Early Cruise (smooth sine rotation)
           const p1 = elapsed / earlyDurationMs;
           const ease1 = Math.sin((p1 * Math.PI) / 2);
           currentAngle = startAngle + earlyAngleDelta * ease1;
@@ -526,38 +823,56 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
           const angleTraversed = currentAngle - startAngle;
           roundsRemaining = Math.max(2, Math.ceil((totalAngleDelta - angleTraversed) / 360));
           setIsInFinalInspection(false);
+
+          // Cruise countdown progression
+          const stepsRemaining = Math.max(
+            totalStepsInLast2,
+            Math.round(totalSteps - (p1 * (totalSteps - totalStepsInLast2)))
+          );
+          setCountdownStep(stepsRemaining);
+
+          // Periodic click
+          if (Math.floor(elapsed / 800) !== Math.floor((elapsed - 16) / 800)) {
+            playTickSound(880);
+          }
         } else {
-          // PHASE 2: The Last 2 Rounds (Slower with authentic mechanical inertia)
+          // Phase 2: Last 2 Rounds (Token-by-token synchronous inspection with inertia)
           isLast2Phase = true;
           setIsInFinalInspection(true);
           const elapsed2 = Math.min(last2RoundsDurationMs, elapsed - earlyDurationMs);
           const p2 = elapsed2 / last2RoundsDurationMs;
-          // Decelerating power curve: slows down dramatically near the end
-          const ease2 = 1 - Math.pow(1 - p2, 2.8);
-          currentAngle = startAngle + earlyAngleDelta + last2AngleDelta * ease2;
+          // Smooth decelerating cubic curve
+          const ease2 = 1 - Math.pow(1 - p2, 2.4);
+          const angleInLast2 = last2AngleDelta * ease2;
+          currentAngle = startAngle + earlyAngleDelta + angleInLast2;
 
           const angleTraversed = currentAngle - startAngle;
           roundsRemaining = Math.max(0, Math.ceil((totalAngleDelta - angleTraversed) / 360));
+
+          // Exact token-by-token countdown step: Decrements by 1 each time pointer enters next token!
+          const tokensPassed = Math.floor(angleInLast2 / tokenAngleWidth);
+          const remainingStepsInPhase2 = Math.max(0, totalStepsInLast2 - tokensPassed);
+          setCountdownStep(remainingStepsInPhase2);
+
+          if (tokensPassed !== lastTokensPassed) {
+            lastTokensPassed = tokensPassed;
+            playTickSound(700);
+            triggerHaptic('light');
+
+            // Suspense heartbeat when near zero
+            if (remainingStepsInPhase2 <= 8) {
+              playHeartbeatSound();
+            }
+          }
         }
 
         setPointerAngle(currentAngle);
         setRevolutionCount(roundsRemaining);
 
-        // Step-by-step distance countdown down to 0
-        const progressOverall = Math.min(1, elapsed / totalDurationMs);
-        const stepsRemaining = Math.max(0, Math.round(totalSteps * (1 - Math.pow(progressOverall, 1.8))));
-        setCountdownStep(stepsRemaining);
-
-        // Play ticker audio on each token step (crisp and slower during last 2 rounds)
-        if (stepsRemaining !== lastStepTicked) {
-          playTickSound(isLast2Phase ? 720 : 880);
-          lastStepTicked = stepsRemaining;
-        }
-
         if (elapsed < totalDurationMs) {
           animationFrameRef.current = requestAnimationFrame(animate);
         } else {
-          // Lands precisely at countdownStep = 0!
+          // Landed precisely at winning token!
           setCountdownStep(0);
           setRevolutionCount(0);
           setIsInFinalInspection(false);
@@ -570,7 +885,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     });
   };
 
-  // Winner Landed Handler with Fair Share Quota ("Cup is Full") Evaluation
+  // Winner Landed Handler with Cumulative Additive Fair Share Quota Evaluation
   const handleWinnerLanded = (
     winningToken: LottoTokenItem,
     rank: number,
@@ -583,6 +898,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
 
     const prizeWon = prizeStakes[rank - 1] || 0;
     const rankPct = (RANK_PERCENTAGES[rank - 1] || 0) * 100;
+
     const newWinner: LottoWinnerItem = {
       rank,
       telegramUserId: winningToken.telegramUserId,
@@ -597,41 +913,70 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
     setWinners(updatedWinners);
     setCelebratingWinner(newWinner);
 
-    // 1. Remove ALL tokens of this winning user
-    let remainingTokens = pool.filter(
-      (t) => t.telegramUserId !== winningToken.telegramUserId
-    );
+    // 1. Remove ALL tokens belonging to this winning user
+    let remainingTokens = pool.filter((t) => t.telegramUserId !== winningToken.telegramUserId);
 
-    // 2. Update winning አጫዋች's accumulated prize share
+    // 2. Additive Cumulative Fair Share Quota Calculation:
+    // Add current stage percentage to the winning admin's cumulative total
     const adminId = winningToken.adminId;
+    const stageRecord: AdminStageRecord = {
+      rank,
+      percentage: rankPct,
+      prizeAmount: prizeWon,
+      winnerName: winningToken.userName,
+    };
+
+    const updatedStages = {
+      ...adminStagesWon,
+      [adminId]: [...(adminStagesWon[adminId] || []), stageRecord],
+    };
+    setAdminStagesWon(updatedStages);
+
     const currentAccum = (adminAccumulatedShare[adminId] || 0) + rankPct;
     const newAccumShares = { ...adminAccumulatedShare, [adminId]: currentAccum };
     setAdminAccumulatedShare(newAccumShares);
 
     const adminQuota = initialAdminQuotas[adminId] || 20;
-    let quotaRetiredNotice = '';
+    let newlyFullAdmin: RetiredAdminCeremonyData | null = null;
 
-    // 3. Fair Share Quota Check ("Cup is Full")
+    // 3. Fair Share Quota Check ("ጽዋው ሞልቷል!")
     // If accumulated prize % reaches or exceeds initial quota, permanently retire all remaining tokens of this admin!
     if (currentAccum >= adminQuota && !retiredAdmins.includes(adminId)) {
       const newlyRetired = [...retiredAdmins, adminId];
       setRetiredAdmins(newlyRetired);
 
-      // Check safety: don't retire if it would leave 0 tokens on the wheel
       const tokensAfterRetire = remainingTokens.filter((t) => t.adminId !== adminId);
+      const countRemoved = remainingTokens.length - tokensAfterRetire.length;
       if (tokensAfterRetire.length > 0) {
         remainingTokens = tokensAfterRetire;
-        quotaRetiredNotice = ` • 🛑 አጫዋች ${winningToken.adminName} የዛሬውን ፍትሃዊ ድርሻ (${currentAccum}% / ${adminQuota}%) ሙሉ በሙሉ ስላገኘ፣ የቀሩት እጣዎቹ ከዛሬው ጨዋታ ተሰናብተዋል!`;
       }
+
+      const allStages = updatedStages[adminId] || [stageRecord];
+      const stagesText = allStages.map((s) => `${s.percentage}% (#${s.rank})`).join(' + ');
+      const totalPrize = allStages.reduce((sum, s) => sum + s.prizeAmount, 0);
+
+      newlyFullAdmin = {
+        adminId,
+        adminName: winningToken.adminName,
+        adminColor: adminColorMap[adminId] || '#f59e0b',
+        initialQuota: adminQuota,
+        totalPercentage: currentAccum,
+        stagesBreakdown: `${stagesText} = ${currentAccum}%`,
+        totalWonEtb: totalPrize,
+        tokensRemoved: countRemoved,
+      };
     }
 
     setActiveTokens(remainingTokens);
 
     setStatusMessage(
-      `🎉 #${rank}ኛ እድለኛ / አሸናፊ! ${winningToken.userName} ${prizeWon.toLocaleString()} ETB አሸንፈዋል (አጫዋች: ${winningToken.adminName})${quotaRetiredNotice}`
+      `🎉 #${rank}ኛ እድለኛ / አሸናፊ! ${winningToken.userName} ${prizeWon.toLocaleString()} ETB አሸንፈዋል (አጫዋች: ${winningToken.adminName})`
     );
 
-    // Fallback: If no more tokens remain before rank 10, redistribute remainder proportionally to drawn winners
+    // Audio voice announcement
+    announceWithVoice(`#${rank}ኛ ደረጃ እድለኛ / አሸናፊ ${winningToken.userName}! እጣ ቁጥር ${winningToken.tokenNumber}`);
+
+    // Fallback: If no more tokens remain before rank 10
     if (remainingTokens.length === 0 && rank < 10) {
       const undistributedPot = prizeStakes.slice(rank).reduce((a, b) => a + b, 0);
       if (undistributedPot > 0 && updatedWinners.length > 0) {
@@ -651,31 +996,49 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
       }
     }
 
-    // Celebration Timer: 4s in demo mode, 18s in live mode
-    let countdown = isDemo ? 4 : 18;
+    // Space of 30 seconds before drawing the next winner!
+    let countdown = 30;
     setCelebrationCountdown(countdown);
-    const celebrationInterval = setInterval(() => {
+
+    if (celebrationIntervalRef.current) {
+      clearInterval(celebrationIntervalRef.current);
+    }
+
+    celebrationIntervalRef.current = setInterval(() => {
       if (isCancelledRef.current) {
-        clearInterval(celebrationInterval);
+        if (celebrationIntervalRef.current) clearInterval(celebrationIntervalRef.current);
         return;
       }
 
       countdown -= 1;
       setCelebrationCountdown(countdown);
 
+      // Pacing during the 30-second intermission:
+      // - First 14 seconds: Winner celebration overlay
+      // - If admin cup filled: Next 13 seconds show the slow Admin Quota Ceremony!
+      if (newlyFullAdmin) {
+        if (countdown === 16) {
+          setCelebratingWinner(null);
+          setRetiredAdminCeremony(newlyFullAdmin);
+          announceWithVoice(`የአጫዋች ${newlyFullAdmin.adminName} ጽዋ ሞልቷል!`);
+        } else if (countdown === 3) {
+          setRetiredAdminCeremony(null);
+        }
+      }
+
       if (countdown <= 0) {
-        clearInterval(celebrationInterval);
+        if (celebrationIntervalRef.current) clearInterval(celebrationIntervalRef.current);
+        celebrationIntervalRef.current = null;
         setCelebratingWinner(null);
+        setRetiredAdminCeremony(null);
 
         // Advance to next rank if under 10 and tokens remain
         if (rank < 10 && remainingTokens.length > 0) {
           const nextRank = rank + 1;
           setCurrentDrawingRank(nextRank);
-          // Re-slice distance constant for the new remaining token count
           const nextSlice = getActiveDistanceSlice(distanceInfo, remainingTokens.length);
           spinPointerToWinner(nextRank, nextSlice.sliceValue, isDemo, remainingTokens);
         } else {
-          // All 10 winners drawn!
           setIsDrawing(false);
           setIsDemoRunning(false);
           setStatusMessage('🏆 ሁሉም 10 እድለኞች / አሸናፊዎች ወጥተዋል! ይፋዊው ውጤት በቦርዱ ላይ ይቆያል።');
@@ -812,17 +1175,17 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         </div>
       </div>
 
-      {/* Participating አጫዋቾች Fair Share Quota Gauges */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 text-xs space-y-2.5">
+      {/* Participating አጫዋቾች Fair Share Quota Gauges (3D Glass Beaker Cup Display) */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-3.5 text-xs space-y-3 shadow-xl">
         <div className="flex justify-between items-center text-[11px] font-bold text-slate-300">
           <span className="flex items-center gap-1.5">
             <Users className="w-3.5 h-3.5 text-amber-400" />
-            <span>ተሳታፊ አጫዋቾችና ፍትሃዊ የካዝና ድርሻ (Fair Share Quota)</span>
+            <span>ተሳታፊ አጫዋቾችና ፍትሃዊ የካዝና ድርሻ (Fair Share Quota Cups)</span>
           </span>
-          <span className="text-[10px] text-slate-400">ኩባያ ሲሞላ ይሰናበታል</span>
+          <span className="text-[10px] text-slate-400">ጽዋው ሲሞላ ይሰናበታል</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {Object.keys(initialAdminQuotas).map((adminId) => {
             const quota = initialAdminQuotas[adminId] || 20;
             const accum = adminAccumulatedShare[adminId] || 0;
@@ -830,42 +1193,18 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
             const isFull = accum >= quota;
             const token = activeTokens.find((t) => t.adminId === adminId) || tokens.find((t) => t.adminId === adminId);
             const adminName = token?.adminName || adminId.slice(0, 10);
-            const fillRatio = Math.min(100, (accum / quota) * 100);
+            const stages = adminStagesWon[adminId] || [];
 
             return (
-              <div
+              <AdminCupGraphic
                 key={adminId}
-                className={`p-2.5 rounded-xl border text-[11px] space-y-1.5 ${
-                  isFull
-                    ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-300'
-                }`}
-              >
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                    <span className="font-bold text-white truncate max-w-[120px]">{adminName}</span>
-                  </div>
-                  <span className="font-mono text-[10px] font-bold">
-                    {isFull ? (
-                      <span className="text-emerald-400 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 inline" />
-                        <span>ኩባያው ሞልቷል ({accum}%)</span>
-                      </span>
-                    ) : (
-                      <span>{accum}% / {quota}%</span>
-                    )}
-                  </span>
-                </div>
-
-                {/* Cup Fill Progress Bar */}
-                <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-slate-800">
-                  <div
-                    style={{ width: `${fillRatio}%`, backgroundColor: isFull ? '#10b981' : color }}
-                    className="h-full rounded-full transition-all duration-500"
-                  />
-                </div>
-              </div>
+                adminName={adminName}
+                adminColor={color}
+                quota={quota}
+                accum={accum}
+                isFull={isFull}
+                stages={stages}
+              />
             );
           })}
         </div>
@@ -1056,72 +1395,88 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
               );
             })}
 
-            {/* 7. Ultra-Visible 3D Metallic Pointer (Gold Arm with Vivid Ruby Needle Tip) */}
+            {/* 7. Watch Hand 3D Precision Pointer (Anchored to Center Axle, Sweeping Smoothly) */}
             <g transform={`rotate(${pointerAngle}, ${centerCoord}, ${centerCoord})`}>
-              {/* Pointer Metallic Arm */}
-              <line
-                x1={centerCoord}
-                y1={centerCoord}
-                x2={centerCoord}
-                y2={centerCoord - circleRadius + 14}
-                stroke="url(#goldInlayGrad)"
-                strokeWidth="6"
-                strokeLinecap="round"
-                filter="url(#neonGlow)"
+              {/* Counterbalance rear teardrop */}
+              <path
+                d={`M ${centerCoord - 3.5} ${centerCoord} L ${centerCoord - 2} ${centerCoord + 28} A 4 4 0 0 0 ${centerCoord + 2} ${centerCoord + 28} L ${centerCoord + 3.5} ${centerCoord} Z`}
+                fill="url(#goldInlayGrad)"
+                stroke="#1f0d04"
+                strokeWidth="0.8"
               />
-              {/* Vibrant Ruby Arrowhead with crisp needle point */}
+              <circle
+                cx={centerCoord}
+                cy={centerCoord + 28}
+                r="5"
+                fill="url(#goldInlayGrad)"
+                stroke="#78350f"
+                strokeWidth="1.2"
+              />
+
+              {/* Tapered Watch-Hand Body (Left bevel lighter, Right bevel darker) */}
               <polygon
-                points={`${centerCoord},${centerCoord - circleRadius - 4} ${centerCoord - 9},${centerCoord - circleRadius + 18} ${centerCoord + 9},${centerCoord - circleRadius + 18}`}
+                points={`${centerCoord},${centerCoord} ${centerCoord - 4.5},${centerCoord - 25} ${centerCoord - 2},${centerCoord - circleRadius + 10} ${centerCoord},${centerCoord - circleRadius + 14}`}
+                fill="#fef08a"
+                stroke="#ca8a04"
+                strokeWidth="0.5"
+              />
+              <polygon
+                points={`${centerCoord},${centerCoord} ${centerCoord},${centerCoord - circleRadius + 14} ${centerCoord + 2},${centerCoord - circleRadius + 10} ${centerCoord + 4.5},${centerCoord - 25}`}
+                fill="#ca8a04"
+                stroke="#78350f"
+                strokeWidth="0.5"
+              />
+
+              {/* Precision Ruby Arrowhead Needle Point extending to tokens */}
+              <polygon
+                points={`${centerCoord},${centerCoord - circleRadius - 5} ${centerCoord - 7.5},${centerCoord - circleRadius + 14} ${centerCoord + 7.5},${centerCoord - circleRadius + 14}`}
                 fill="url(#rubyHubGrad)"
                 stroke="#fef08a"
                 strokeWidth="1.5"
                 filter="url(#neonGlow)"
               />
-              {/* Sharp Needle Tip Pointer Line */}
+              {/* White precision hairline pointer indicator */}
               <line
                 x1={centerCoord}
-                y1={centerCoord - circleRadius + 18}
+                y1={centerCoord - circleRadius + 14}
                 x2={centerCoord}
-                y2={centerCoord - circleRadius - 4}
+                y2={centerCoord - circleRadius - 5}
                 stroke="#ffffff"
                 strokeWidth="2"
-              />
-              {/* Counter-balance Brass Tail */}
-              <line
-                x1={centerCoord}
-                y1={centerCoord}
-                x2={centerCoord}
-                y2={centerCoord + 30}
-                stroke="#cbd5e1"
-                strokeWidth="3.5"
                 strokeLinecap="round"
+              />
+
+              {/* Center Watch Axle Arbor / Pivot Boss */}
+              <circle
+                cx={centerCoord}
+                cy={centerCoord}
+                r="14"
+                fill="url(#goldInlayGrad)"
+                stroke="#451a03"
+                strokeWidth="2"
               />
               <circle
                 cx={centerCoord}
-                cy={centerCoord + 30}
-                r="4.5"
-                fill="url(#goldInlayGrad)"
+                cy={centerCoord}
+                r="8"
+                fill="url(#rubyHubGrad)"
+                stroke="#fef08a"
+                strokeWidth="1.5"
+              />
+              {/* Center watchmaker pivot screw slot */}
+              <line
+                x1={centerCoord - 4}
+                y1={centerCoord}
+                x2={centerCoord + 4}
+                y2={centerCoord}
+                stroke="#fef08a"
+                strokeWidth="1.5"
+                strokeLinecap="round"
               />
             </g>
-
-            {/* 8. Center Ruby & Gold Casino Pivot Cap */}
-            <circle
-              cx={centerCoord}
-              cy={centerCoord}
-              r="17"
-              fill="url(#rubyHubGrad)"
-              stroke="url(#goldInlayGrad)"
-              strokeWidth="3"
-            />
-            <circle
-              cx={centerCoord}
-              cy={centerCoord}
-              r="6"
-              fill="#fef08a"
-            />
           </svg>
 
-          {/* Celebration Overlay Popup */}
+          {/* Winner Celebration Overlay (Shown in first portion of 30s intermission) */}
           {celebratingWinner && (
             <div className="absolute inset-0 bg-black/85 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center p-4 text-center z-20 animate-fadeIn">
               <div className="w-14 h-14 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 flex items-center justify-center text-slate-950 font-black text-2xl shadow-xl animate-bounce">
@@ -1139,7 +1494,51 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
               <div className="text-xs text-slate-400 mt-1">
                 እጣ #{celebratingWinner.tokenNumber} • አጫዋች: {celebratingWinner.adminName}
               </div>
-              <div className="mt-4 px-3 py-1 bg-slate-800 rounded-full text-xs text-amber-300 font-mono font-bold">
+              <div className="mt-4 px-3.5 py-1.5 bg-slate-800 rounded-full text-xs text-amber-300 font-mono font-bold border border-amber-500/30">
+                ቀጣይ እጣ ማውጣት በ {celebrationCountdown} ሰከንድ ውስጥ...
+              </div>
+            </div>
+          )}
+
+          {/* Dedicated Slow Admin Quota Ceremony Overlay ("ጽዋው ሞልቷል!") */}
+          {retiredAdminCeremony && (
+            <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center p-5 text-center z-30 animate-fadeIn border border-amber-500/50 shadow-2xl">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-600 flex items-center justify-center text-3xl shadow-2xl animate-bounce">
+                🏆
+              </div>
+              <div className="mt-2.5 text-xs uppercase font-black text-amber-400 tracking-wider flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <span>ጽዋው ሞልቷል! (የአጫዋች ኮታ ተሟልቷል)</span>
+              </div>
+              <div className="text-xl font-black text-white mt-1">
+                {retiredAdminCeremony.adminName}
+              </div>
+
+              {/* Detailed Arithmetic Breakdown */}
+              <div className="mt-3 bg-slate-900 border border-slate-700/80 rounded-2xl p-3 w-full max-w-xs text-xs space-y-2 text-left">
+                <div className="flex justify-between items-center text-slate-300">
+                  <span className="text-slate-400">የመነሻ የተፈቀደ ኮታ:</span>
+                  <span className="font-mono font-bold text-amber-300">{retiredAdminCeremony.initialQuota}%</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-300">
+                  <span className="text-slate-400">ያሸነፈው ድምር ድርሻ:</span>
+                  <span className="font-mono font-bold text-emerald-400">{retiredAdminCeremony.stagesBreakdown}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-300">
+                  <span className="text-slate-400">ያገኘው ጠቅላላ ሽልማት:</span>
+                  <span className="font-mono font-bold text-white">+{retiredAdminCeremony.totalWonEtb.toLocaleString()} ETB</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-300 border-t border-slate-800 pt-1.5">
+                  <span className="text-slate-400">ከክቡ የተሰናበቱ እጣዎች:</span>
+                  <span className="font-mono font-bold text-rose-400">{retiredAdminCeremony.tokensRemoved} እጣዎች</span>
+                </div>
+              </div>
+
+              <div className="mt-2.5 text-[11px] text-slate-300 leading-snug px-3 bg-amber-500/10 border border-amber-500/20 py-2 rounded-xl">
+                💡 ይህ አጫዋች የዛሬውን ፍትሃዊ ድርሻ (ከ {retiredAdminCeremony.initialQuota}% በላይ) ስላገኘ፣ ሌሎች አጫዋቾች የማሸነፍ እድል እንዲያገኙ የቀሩት እጣዎቹ ከዛሬው እጣ በክብር ተሰናብተዋል!
+              </div>
+
+              <div className="mt-3 text-[10px] text-slate-400 font-mono">
                 ቀጣይ እጣ ማውጣት በ {celebrationCountdown} ሰከንድ ውስጥ...
               </div>
             </div>
@@ -1153,37 +1552,37 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
           </div>
         )}
 
-        {/* Demo Controls: Single Start Button & Stop/Reset Button */}
+        {/* Demo Controls: Single Start Button & Always-Responsive Stop/Reset Button */}
         {isDemoModeAllowed && (
-          <div className="mt-3.5 flex items-center gap-2">
-            {!isDrawing && winners.length === 0 && (
+          <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2">
+            {!isDrawing && !isDemoRunning && winners.length === 0 && (
               <button
                 onClick={startDemoDrawing}
                 className="px-5 py-2.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black rounded-2xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
               >
                 <Play className="w-4 h-4 fill-current text-slate-950" />
-                <span>የማሳያ እጣ ማውጣት (Live Demo)</span>
+                <span>የማሳያ እጣ ማውጣት (Live Demo - 1 ደቂቃ በደረጃ)</span>
               </button>
             )}
 
-            {(isDrawing || isDemoRunning || winners.length > 0) && (
+            {(isDrawing || isDemoRunning || winners.length > 0 || Object.keys(adminAccumulatedShare).length > 0) && (
               <button
                 onClick={handleStopDemo}
-                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 font-bold rounded-2xl text-xs flex items-center gap-1.5 transition-all active:scale-95"
+                className="px-5 py-2.5 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 text-rose-300 hover:text-white font-black rounded-2xl text-xs flex items-center gap-2 transition-all active:scale-95 shadow-md shadow-rose-950/40"
               >
-                <Square className="w-3.5 h-3.5 fill-current" />
-                <span>⏹️ ማሳያውን አቁም / ወደ መደበኛ መልስ</span>
+                <Square className="w-4 h-4 fill-current" />
+                <span>⏹️ ማሳያውን አቁም / ወደ መደበኛ መልስ (ጽዋዎችን አጽዳ)</span>
               </button>
             )}
           </div>
         )}
       </div>
 
-      {/* Retractible Rule Guide (የሎቶ እጣ ማውጣት ህጎችና መመሪያዎች) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+      {/* Retractable Rule Guide with Earth-Moon Orbit Simulation */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-lg">
         <button
           onClick={() => setIsRulesExpanded(!isRulesExpanded)}
-          className="w-full p-3.5 flex justify-between items-center text-left text-xs font-bold text-white hover:bg-slate-800/50 transition-colors"
+          className="w-full p-4 flex justify-between items-center text-left text-xs font-bold text-white hover:bg-slate-800/50 transition-colors"
         >
           <div className="flex items-center gap-2 text-amber-400">
             <Info className="w-4 h-4" />
@@ -1193,7 +1592,10 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
         </button>
 
         {isRulesExpanded && (
-          <div className="p-4 pt-1 border-t border-slate-800 text-xs text-slate-300 space-y-3 leading-relaxed">
+          <div className="p-4 pt-1 border-t border-slate-800 text-xs text-slate-300 space-y-3.5 leading-relaxed">
+            {/* Earth-Moon Animated Orbit Simulation */}
+            <EarthMoonOrbitDiagram distanceMeters={distanceInfo.distanceMeters} />
+
             <div className="space-y-1">
               <h4 className="font-black text-amber-400 flex items-center gap-1.5">
                 <span>1. የጨረቃና የምድር ርቀት (Earth-Moon Distance Cosmic Seed)</span>
@@ -1208,7 +1610,7 @@ export const MegaCircleLotto: React.FC<MegaCircleLottoProps> = ({
                 <span>2. የአጫዋች ፍትሃዊ ድርሻ ህግ (Fair Share Quota / Cup Rule)</span>
               </h4>
               <p className="text-[11px] text-slate-400">
-                እያንዳንዱ አጫዋች ባስመዘገበው የእጣዎች ብዛት መሰረት የካዝናው ድርሻ ኮታ ይሰጠዋል። አንድ አጫዋች ያገኘው የሽልማት ድርሻ ከተፈቀደለት ኮታ እኩል ወይም የበለጠ ሲሆን (ጽዋው ሲሞላ)፣ የቀሩት እጣዎቹ ከዛሬው እጣ በቋሚነት ይሰናበታሉ። ይህም ሌሎች አጫዋቾች የማሸነፍ እድል እንዲያገኙ ያረጋግጣል።
+                እያንዳንዱ አጫዋች ባስመዘገበው የእጣዎች ብዛት መሰረት የካዝናው ድርሻ ኮታ ይሰጠዋል። አንድ አጫዋች በየደረጃው ያገኘው የሽልማት ድርሻ ድምር (50% + 25% + ...) ከተፈቀደለት ኮታ እኩል ወይም የበለጠ ሲሆን (ጽዋው ሲሞላ)፣ የቀሩት እጣዎቹ ከዛሬው እጣ በቋሚነት ይሰናበታሉ። ይህም ሌሎች አጫዋቾች የማሸነፍ እድል እንዲያገኙ ያረጋግጣል።
               </p>
             </div>
 
